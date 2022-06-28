@@ -5,7 +5,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+struct bt_mesh_sg {
+	const void *data;
+	size_t len;
+};
+
 int bt_mesh_crypto_init(void);
+
+int bt_mesh_aes_cmac(const uint8_t key[16], struct bt_mesh_sg *sg,
+			size_t sg_len, uint8_t mac[16]);
 
 int bt_mesh_s1(const char *m, uint8_t salt[16]);
 
