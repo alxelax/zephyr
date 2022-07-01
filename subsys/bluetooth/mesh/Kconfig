@@ -5,10 +5,6 @@
 
 menuconfig BT_MESH
 	bool "Bluetooth mesh support"
-	select TINYCRYPT
-	select TINYCRYPT_AES
-	select TINYCRYPT_AES_CMAC
-	select BT_HOST_CCM
 	depends on BT_OBSERVER && BT_BROADCASTER
 	help
 	  This option enables Bluetooth mesh support. The specific
@@ -16,6 +12,34 @@ menuconfig BT_MESH
 	  that have been enabled in the stack, such as GATT support.
 
 if BT_MESH
+
+choice BT_MESH_CRYPTO_LIB
+	prompt "Crypto library selection for mesh security"
+	default BT_MESH_USES_MBEDTLS_PSA
+
+config BT_MESH_USES_TINYCRYPT
+	bool "Use TinyCrypt"
+	select TINYCRYPT
+	select TINYCRYPT_AES
+	select TINYCRYPT_AES_CMAC
+	select BT_HOST_CCM
+	help
+	  Use TinyCrypt library to perform crypto operations.
+
+config BT_MESH_USES_MBEDTLS_PSA
+	bool "Use mbed TLS PSA"
+	select MBEDTLS
+	select MBEDTLS_PSA
+	select MBEDTLS_PSA_EXTERNAL_ENTROPY
+	select MBEDTLS_CIPHER
+	select MBEDTLS_MAC_CMAC_ENABLED
+	select MBEDTLS_CIPHER_AES_ENABLED
+	select MBEDTLS_AES_ROM_TABLES
+	select BT_HOST_CCM
+	help
+	  Use mbed TLS library to perform crypto operations.
+
+endchoice
 
 # Virtual option enabled whenever Generic Provisioning layer is needed
 config BT_MESH_PROV
@@ -30,7 +54,7 @@ config BT_MESH_PROV_DEVICE
 
 config BT_MESH_PROV_OOB_PUBLIC_KEY
 	bool "OOB Public key support"
-	select TINYCRYPT_ECC_DH
+	select TINYCRYPT_ECC_DH if BT_MESH_USES_TINYCRYPT
 	depends on BT_MESH_PROV_DEVICE
 	help
 	  Enable this option if public key is to be exchanged via Out of Band (OOB) technology.
