@@ -226,4 +226,17 @@ config APP_LINK_WITH_MBEDTLS
 	  disabled if the include paths for MBEDTLS are causing aliasing
 	  issues for 'app'.
 
+config MBEDTLS_PSA
+	bool "Allow using mbed TLS PSA"
+	help
+	  Enable mbed TLS PSA API.
+
+config MBEDTLS_PSA_EXTERNAL_ENTROPY
+	bool "External entropy source for PSA"
+	depends on MBEDTLS_PSA
+	help
+	  Enable an external entropy source for MBEDTLS PSA.
+	  This option mandates to have random numbers generator
+	  with cryptographic quality and high performance.
+
 endif # MBEDTLS
