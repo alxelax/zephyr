@@ -449,6 +449,16 @@
 #define MBEDTLS_SSL_EXTENDED_MASTER_SECRET
 #endif
 
+/* Enable mbedTLS PSA */
+#if defined(CONFIG_MBEDTLS_PSA)
+#define MBEDTLS_USE_PSA_CRYPTO
+#define MBEDTLS_PSA_CRYPTO_C
+#endif
+
+#if defined(CONFIG_MBEDTLS_PSA_EXTERNAL_ENTROPY)
+#define MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG
+#endif
+
 /* User config file */
 
 #if defined(CONFIG_MBEDTLS_USER_CONFIG_FILE)
