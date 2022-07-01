@@ -40,6 +40,7 @@
 #include "settings.h"
 #include "mesh.h"
 #include "gatt_cli.h"
+#include "crypto.h"
 
 int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
 		      uint8_t flags, uint32_t iv_index, uint16_t addr,
@@ -339,6 +340,11 @@ int bt_mesh_init(const struct bt_mesh_prov *prov,
 	int err;
 
 	err = bt_mesh_test();
+	if (err) {
+		return err;
+	}
+
+	err = bt_mesh_crypto_init();
 	if (err) {
 		return err;
 	}

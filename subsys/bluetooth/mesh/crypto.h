@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+int bt_mesh_crypto_init(void);
+
 int bt_mesh_s1(const char *m, uint8_t salt[16]);
 
 int bt_mesh_k1(const uint8_t *ikm, size_t ikm_len, const uint8_t salt[16],

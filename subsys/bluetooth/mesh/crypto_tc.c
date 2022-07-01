@@ -602,3 +602,8 @@ int bt_mesh_dhkey_gen(const uint8_t *pub_key, const uint8_t *priv_key, uint8_t *
 
 	return 0;
 }
+
+int bt_mesh_crypto_init(void)
+{
+	return 0;
+}
