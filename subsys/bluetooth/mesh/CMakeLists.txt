@@ -13,7 +13,6 @@ zephyr_library_sources_ifdef(CONFIG_BT_MESH
     app_keys.c
     transport.c
     heartbeat.c
-    crypto.c
     access.c
     msg.c
     cfg_srv.c
@@ -63,3 +62,9 @@ zephyr_library_sources_ifdef(CONFIG_BT_MESH_SELF_TEST test.c)
 zephyr_library_sources_ifdef(CONFIG_BT_MESH_SHELL shell.c)
 
 zephyr_library_sources_ifdef(CONFIG_BT_MESH_CDB cdb.c)
+
+zephyr_library_sources_ifdef(CONFIG_BT_MESH_USES_TINYCRYPT crypto_tc.c)
+
+zephyr_library_sources_ifdef(CONFIG_BT_MESH_USES_MBEDTLS_PSA crypto_mtls.c)
+
+zephyr_library_link_libraries_ifdef(CONFIG_MBEDTLS mbedTLS)
