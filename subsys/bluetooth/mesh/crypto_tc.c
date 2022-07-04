@@ -15,12 +15,33 @@
 #include <tinycrypt/ecc.h>
 #include <tinycrypt/ecc_dh.h>
 
+#include <zephyr/bluetooth/crypto.h>
+
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_MESH_DEBUG_CRYPTO)
 #define LOG_MODULE_NAME bt_mesh_tc_crypto
 #include "common/log.h"
 
 #include "mesh.h"
 #include "crypto.h"
+
+int bt_mesh_encrypt(const uint8_t key[16], const uint8_t plaintext[16], uint8_t enc_data[16])
+{
+	return bt_encrypt_be(key, plaintext, enc_data);
+}
+
+int bt_mesh_ccm_encrypt(const uint8_t key[16], uint8_t nonce[13],
+			const uint8_t *plaintext, size_t len, const uint8_t *aad,
+			size_t aad_len, uint8_t *enc_data, size_t mic_size)
+{
+	return bt_ccm_encrypt(key, nonce, plaintext, len, aad, aad_len, enc_data, mic_size);
+}
+
+int bt_mesh_ccm_decrypt(const uint8_t key[16], uint8_t nonce[13],
+			const uint8_t *enc_data, size_t len, const uint8_t *aad,
+			size_t aad_len, uint8_t *plaintext, size_t mic_size)
+{
+	return bt_ccm_decrypt(key, nonce, enc_data, len, aad, aad_len, plaintext, mic_size);
+}
 
 int bt_mesh_aes_cmac(const uint8_t key[16], struct bt_mesh_sg *sg,
 			size_t sg_len, uint8_t mac[16])

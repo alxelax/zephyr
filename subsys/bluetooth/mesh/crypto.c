@@ -11,7 +11,6 @@
 #include <zephyr/sys/byteorder.h>
 
 #include <zephyr/bluetooth/mesh.h>
-#include <zephyr/bluetooth/crypto.h>
 
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_MESH_DEBUG_CRYPTO)
 #define LOG_MODULE_NAME bt_mesh_crypto
@@ -250,7 +249,7 @@ int bt_mesh_net_obfuscate(uint8_t *pdu, uint32_t iv_index,
 
 	BT_DBG("PrivacyRandom %s", bt_hex(priv_rand, 16));
 
-	err = bt_encrypt_be(privacy_key, priv_rand, tmp);
+	err = bt_mesh_encrypt(privacy_key, priv_rand, tmp);
 	if (err) {
 		return err;
 	}
@@ -281,7 +280,7 @@ int bt_mesh_net_encrypt(const uint8_t key[16], struct net_buf_simple *buf,
 
 	BT_DBG("Nonce %s", bt_hex(nonce, 13));
 
-	err = bt_ccm_encrypt(key, nonce, &buf->data[7], buf->len - 7, NULL, 0,
+	err = bt_mesh_ccm_encrypt(key, nonce, &buf->data[7], buf->len - 7, NULL, 0,
 			     &buf->data[7], mic_len);
 	if (!err) {
 		net_buf_simple_add(buf, mic_len);
@@ -310,7 +309,7 @@ int bt_mesh_net_decrypt(const uint8_t key[16], struct net_buf_simple *buf,
 
 	buf->len -= mic_len;
 
-	return bt_ccm_decrypt(key, nonce, &buf->data[7], buf->len - 7, NULL, 0,
+	return bt_mesh_ccm_decrypt(key, nonce, &buf->data[7], buf->len - 7, NULL, 0,
 			      &buf->data[7], mic_len);
 }
 
@@ -348,7 +347,7 @@ int bt_mesh_app_encrypt(const uint8_t key[16],
 
 	BT_DBG("Nonce  %s", bt_hex(nonce, 13));
 
-	err = bt_ccm_encrypt(key, nonce, buf->data, buf->len, ctx->ad,
+	err = bt_mesh_ccm_encrypt(key, nonce, buf->data, buf->len, ctx->ad,
 			     ctx->ad ? 16 : 0, buf->data,
 			     APP_MIC_LEN(ctx->aszmic));
 	if (!err) {
@@ -374,7 +373,7 @@ int bt_mesh_app_decrypt(const uint8_t key[16],
 	BT_DBG("AppKey %s", bt_hex(key, 16));
 	BT_DBG("Nonce  %s", bt_hex(nonce, 13));
 
-	err = bt_ccm_decrypt(key, nonce, buf->data, buf->len, ctx->ad,
+	err = bt_mesh_ccm_decrypt(key, nonce, buf->data, buf->len, ctx->ad,
 			     ctx->ad ? 16 : 0, out->data,
 			     APP_MIC_LEN(ctx->aszmic));
 	if (!err) {
@@ -515,13 +514,13 @@ int bt_mesh_prov_conf(const uint8_t conf_key[16], const uint8_t rand[16],
 int bt_mesh_prov_decrypt(const uint8_t key[16], uint8_t nonce[13],
 			 const uint8_t data[25 + 8], uint8_t out[25])
 {
-	return bt_ccm_decrypt(key, nonce, data, 25, NULL, 0, out, 8);
+	return bt_mesh_ccm_decrypt(key, nonce, data, 25, NULL, 0, out, 8);
 }
 
 int bt_mesh_prov_encrypt(const uint8_t key[16], uint8_t nonce[13],
 			 const uint8_t data[25], uint8_t out[25 + 8])
 {
-	return bt_ccm_encrypt(key, nonce, data, 25, NULL, 0, out, 8);
+	return bt_mesh_ccm_encrypt(key, nonce, data, 25, NULL, 0, out, 8);
 }
 
 int bt_mesh_beacon_auth(const uint8_t beacon_key[16], uint8_t flags,
