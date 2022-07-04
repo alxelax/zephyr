@@ -35,7 +35,7 @@ config BT_MESH_USES_MBEDTLS_PSA
 	select MBEDTLS_MAC_CMAC_ENABLED
 	select MBEDTLS_CIPHER_AES_ENABLED
 	select MBEDTLS_AES_ROM_TABLES
-	select BT_HOST_CCM
+	select MBEDTLS_CIPHER_CCM_ENABLED
 	help
 	  Use mbed TLS library to perform crypto operations.
 

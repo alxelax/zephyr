@@ -24,6 +24,135 @@ int bt_mesh_crypto_init(void)
 	return 0;
 }
 
+int bt_mesh_encrypt(const uint8_t key[16], const uint8_t plaintext[16], uint8_t enc_data[16])
+{
+	psa_key_id_t key_id;
+	uint32_t output_len;
+	psa_status_t status;
+	int err = 0;
+
+	psa_key_attributes_t key_attributes = PSA_KEY_ATTRIBUTES_INIT;
+
+	psa_set_key_usage_flags(&key_attributes, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
+	psa_set_key_lifetime(&key_attributes, PSA_KEY_LIFETIME_VOLATILE);
+	psa_set_key_algorithm(&key_attributes, PSA_ALG_ECB_NO_PADDING);
+	psa_set_key_type(&key_attributes, PSA_KEY_TYPE_AES);
+	psa_set_key_bits(&key_attributes, 128);
+
+	status = psa_import_key(&key_attributes, key, 16, &key_id);
+	if (status != PSA_SUCCESS) {
+		return -EIO;
+	}
+
+	status = psa_cipher_encrypt(key_id, PSA_ALG_ECB_NO_PADDING,
+				    plaintext, 16,
+				    enc_data, 16,
+				    &output_len);
+
+	if (status != PSA_SUCCESS || output_len != 16) {
+		err = -EIO;
+	}
+
+	psa_reset_key_attributes(&key_attributes);
+
+	status = psa_destroy_key(key_id);
+	if (status != PSA_SUCCESS) {
+		return -EIO;
+	}
+
+	return err;
+}
+
+int bt_mesh_ccm_encrypt(const uint8_t key[16], uint8_t nonce[13],
+			const uint8_t *plaintext, size_t len, const uint8_t *aad,
+			size_t aad_len, uint8_t *enc_data, size_t mic_size)
+{
+	psa_key_id_t key_id;
+	uint32_t output_len;
+	psa_status_t status;
+	int err = 0;
+
+	psa_algorithm_t alg = PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_CCM, mic_size);
+
+	psa_key_attributes_t key_attributes = PSA_KEY_ATTRIBUTES_INIT;
+
+	psa_set_key_usage_flags(&key_attributes, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
+	psa_set_key_lifetime(&key_attributes, PSA_KEY_LIFETIME_VOLATILE);
+	psa_set_key_algorithm(&key_attributes, alg);
+	psa_set_key_type(&key_attributes, PSA_KEY_TYPE_AES);
+	psa_set_key_bits(&key_attributes, 128);
+
+	status = psa_import_key(&key_attributes, key, 16, &key_id);
+	if (status != PSA_SUCCESS) {
+		return -EIO;
+	}
+
+	status = psa_aead_encrypt(key_id, alg,
+				  nonce, 13,
+				  aad, aad_len,
+				  plaintext, len,
+				  enc_data, len + mic_size,
+				  &output_len);
+
+	if (status != PSA_SUCCESS || output_len != len + mic_size) {
+		err = -EIO;
+	}
+
+	psa_reset_key_attributes(&key_attributes);
+
+	status = psa_destroy_key(key_id);
+	if (status != PSA_SUCCESS) {
+		return -EIO;
+	}
+
+	return err;
+}
+
+int bt_mesh_ccm_decrypt(const uint8_t key[16], uint8_t nonce[13],
+			const uint8_t *enc_data, size_t len, const uint8_t *aad,
+			size_t aad_len, uint8_t *plaintext, size_t mic_size)
+{
+	psa_key_id_t key_id;
+	uint32_t output_len;
+	psa_status_t status;
+	int err = 0;
+
+	psa_algorithm_t alg = PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_CCM, mic_size);
+
+	psa_key_attributes_t key_attributes = PSA_KEY_ATTRIBUTES_INIT;
+
+	psa_set_key_usage_flags(&key_attributes, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
+	psa_set_key_lifetime(&key_attributes, PSA_KEY_LIFETIME_VOLATILE);
+	psa_set_key_algorithm(&key_attributes, alg);
+	psa_set_key_type(&key_attributes, PSA_KEY_TYPE_AES);
+	psa_set_key_bits(&key_attributes, 128);
+
+	status = psa_import_key(&key_attributes, key, 16, &key_id);
+	if (status != PSA_SUCCESS) {
+		return -EIO;
+	}
+
+	status = psa_aead_decrypt(key_id, alg,
+				  nonce, 13,
+				  aad, aad_len,
+				  enc_data, len + mic_size,
+				  plaintext, len,
+				  &output_len);
+
+	if (status != PSA_SUCCESS || output_len != len) {
+		err = -EIO;
+	}
+
+	psa_reset_key_attributes(&key_attributes);
+
+	status = psa_destroy_key(key_id);
+	if (status != PSA_SUCCESS) {
+		return -EIO;
+	}
+
+	return err;
+}
+
 int bt_mesh_aes_cmac(const uint8_t key[16], struct bt_mesh_sg *sg,
 			size_t sg_len, uint8_t mac[16])
 {

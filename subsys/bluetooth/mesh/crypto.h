@@ -12,6 +12,16 @@ struct bt_mesh_sg {
 
 int bt_mesh_crypto_init(void);
 
+int bt_mesh_encrypt(const uint8_t key[16], const uint8_t plaintext[16], uint8_t enc_data[16]);
+
+int bt_mesh_ccm_encrypt(const uint8_t key[16], uint8_t nonce[13],
+			const uint8_t *plaintext, size_t len, const uint8_t *aad,
+			size_t aad_len, uint8_t *enc_data, size_t mic_size);
+
+int bt_mesh_ccm_decrypt(const uint8_t key[16], uint8_t nonce[13],
+			const uint8_t *enc_data, size_t len, const uint8_t *aad,
+			size_t aad_len, uint8_t *plaintext, size_t mic_size);
+
 int bt_mesh_aes_cmac(const uint8_t key[16], struct bt_mesh_sg *sg,
 			size_t sg_len, uint8_t mac[16]);
 
