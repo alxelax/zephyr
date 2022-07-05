@@ -15,6 +15,7 @@
 #include <tinycrypt/ecc.h>
 #include <tinycrypt/ecc_dh.h>
 
+#include <zephyr/bluetooth/mesh.h>
 #include <zephyr/bluetooth/crypto.h>
 
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_MESH_DEBUG_CRYPTO)
@@ -23,6 +24,13 @@
 
 #include "mesh.h"
 #include "crypto.h"
+#include "prov.h"
+
+static struct {
+	bool is_ready;
+	uint8_t private_key_be[PRIV_KEY_SIZE];
+	uint8_t public_key_be[PUB_KEY_SIZE];
+} key;
 
 int bt_mesh_encrypt(const uint8_t key[16], const uint8_t plaintext[16], uint8_t enc_data[16])
 {
@@ -67,18 +75,44 @@ int bt_mesh_aes_cmac(const uint8_t key[16], struct bt_mesh_sg *sg,
 	return 0;
 }
 
+int bt_mesh_pub_key_gen(void)
+{
+	int rc = uECC_make_key(key.public_key_be, key.private_key_be, &curve_secp256r1);
+
+	if (rc == TC_CRYPTO_FAIL) {
+		key.is_ready = false;
+		BT_ERR("Failed to create public/private pair");
+		return -EIO;
+	}
+
+	key.is_ready = true;
+
+	return 0;
+}
+
+const uint8_t *bt_mesh_pub_key_get(void)
+{
+	return key.is_ready ? key.public_key_be : NULL;
+}
+
 int bt_mesh_dhkey_gen(const uint8_t *pub_key, const uint8_t *priv_key, uint8_t *dhkey)
 {
 	if (uECC_valid_public_key(pub_key, &curve_secp256r1)) {
 		BT_ERR("Public key is not valid");
 		return -EIO;
-	} else if (uECC_shared_secret(pub_key, priv_key, dhkey,
-				&curve_secp256r1) != TC_CRYPTO_SUCCESS) {
+	} else if (uECC_shared_secret(pub_key,
+			priv_key ? priv_key : key.private_key_be, dhkey,
+					&curve_secp256r1) != TC_CRYPTO_SUCCESS) {
 		BT_ERR("DHKey generation failed");
 		return -EIO;
 	}
 
 	return 0;
+}
+
+__weak int default_CSPRNG(uint8_t *dst, unsigned int len)
+{
+	return !bt_rand(dst, len);
 }
 
 int bt_mesh_crypto_init(void)
