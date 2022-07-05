@@ -148,4 +148,8 @@ int bt_mesh_prov_decrypt(const uint8_t key[16], uint8_t nonce[13],
 int bt_mesh_prov_encrypt(const uint8_t key[16], uint8_t nonce[13],
 			 const uint8_t data[25], uint8_t out[25 + 8]);
 
+int bt_mesh_pub_key_gen(void);
+
+const uint8_t *bt_mesh_pub_key_get(void);
+
 int bt_mesh_dhkey_gen(const uint8_t *pub_key, const uint8_t *priv_key, uint8_t *dhkey);
