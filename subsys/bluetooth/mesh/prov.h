@@ -69,11 +69,14 @@
 
 #define PROV_IO_OOB_SIZE_MAX   8  /* in bytes */
 
+#define PRIV_KEY_SIZE          32
+#define PUB_KEY_SIZE           PDU_LEN_PUB_KEY
+#define DH_KEY_SIZE            32
+
 #define PROV_BUF(name, len) \
 	NET_BUF_SIMPLE_DEFINE(name, PROV_BEARER_BUF_HEADROOM + PDU_OP_LEN + len)
 
 enum {
-	WAIT_PUB_KEY,           /* Waiting for local PubKey to be generated */
 	LINK_ACTIVE,            /* Link has been opened */
 	WAIT_NUMBER,            /* Waiting for number input from user */
 	WAIT_STRING,            /* Waiting for string input from user */
@@ -86,7 +89,6 @@ enum {
 	WAIT_CONFIRM,           /* Wait for send confirm */
 	WAIT_AUTH,              /* Wait for auth response */
 	OOB_STATIC_KEY,         /* OOB Static Authentication */
-	WAIT_DH_KEY,            /* Wait for DH Key */
 
 	NUM_FLAGS,
 };
@@ -115,7 +117,7 @@ struct bt_mesh_prov_link {
 	uint8_t oob_size;               /* Authen size */
 	uint8_t auth[16];               /* Authen value */
 
-	uint8_t dhkey[BT_DH_KEY_LEN];   /* Calculated DHKey */
+	uint8_t dhkey[DH_KEY_SIZE];     /* Calculated DHKey */
 	uint8_t expect;                 /* Next expected PDU */
 
 	uint8_t conf[16];               /* Local/Remote Confirmation */
@@ -149,7 +151,7 @@ static inline void bt_mesh_prov_buf_init(struct net_buf_simple *buf, uint8_t typ
 	net_buf_simple_add_u8(buf, type);
 }
 
-int bt_mesh_prov_reset_state(void (*func)(const uint8_t key[BT_PUB_KEY_LEN]));
+int bt_mesh_prov_reset_state(void);
 
 bool bt_mesh_prov_active(void);
 
