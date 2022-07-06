@@ -389,6 +389,7 @@ static void test_tx_invalid(void)
 	int err;
 
 	bt_mesh_test_cfg_set(&tx_cfg, 130);
+	bt_mesh_crypto_init();
 	k_sem_init(&observer_sem, 0, 1);
 
 	err = bt_enable(NULL);
@@ -496,6 +497,7 @@ static void test_tx_kr_old_key(void)
 	int err;
 
 	bt_mesh_test_cfg_set(&tx_cfg, 170);
+	bt_mesh_crypto_init();
 	k_sem_init(&observer_sem, 0, 1);
 
 	err = bt_enable(NULL);
@@ -684,6 +686,7 @@ static void test_tx_multiple_netkeys(void)
 	int err;
 
 	bt_mesh_test_cfg_set(&tx_cfg, 340);
+	bt_mesh_crypto_init();
 	k_sem_init(&observer_sem, 0, 1);
 
 	err = bt_enable(NULL);
@@ -846,6 +849,7 @@ static void test_rx_secure_beacon_interval(void)
 	int64_t delta;
 
 	bt_mesh_test_cfg_set(&rx_cfg, 750);
+	bt_mesh_crypto_init();
 	k_sem_init(&observer_sem, 0, 1);
 	k_work_init_delayable(&beacon_timer, secure_beacon_send);
 
