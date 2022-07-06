@@ -37,6 +37,10 @@ config BT_MESH_USES_MBEDTLS_PSA
 	select MBEDTLS_CIPHER_AES_ENABLED
 	select MBEDTLS_AES_ROM_TABLES
 	select MBEDTLS_CIPHER_CCM_ENABLED
+	select MBEDTLS_KEY_EXCHANGE_ECDH_ECDSA_ENABLED
+	select MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
+	select MBEDTLS_ECP_DP_SECP256R1_ENABLED
+	select MBEDTLS_PK_WRITE_C
 	help
 	  Use mbed TLS library to perform crypto operations.
 
@@ -425,7 +429,7 @@ endif # BT_MESH_ADV_EXT
 config BT_MESH_ADV_STACK_SIZE
 	int "Mesh advertiser thread stack size"
 	depends on BT_MESH_ADV_LEGACY
-	default 1024 if BT_HOST_CRYPTO
+	default 1300 if BT_MESH_PROVISIONER
 	default 768
 	help
 	  Size of bt mesh adv thread stack.
