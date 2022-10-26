@@ -303,9 +303,21 @@ static int test_msg_ne_handler(struct bt_mesh_model *model,
 
 static void provision(uint16_t addr)
 {
+	struct bt_mesh_key mesh_net_key;
+	struct bt_mesh_key mesh_dev_key;
 	int err;
 
-	err = bt_mesh_provision(net_key, 0, 0, 0, addr, dev_key);
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, net_key, &mesh_net_key);
+	if (err) {
+		FAIL("Unable to import network key (err: %d)", err);
+	}
+
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_DEV, dev_key, &mesh_dev_key);
+	if (err) {
+		FAIL("Unable to import device key (err: %d)", err);
+	}
+
+	err = bt_mesh_provision(&mesh_net_key, 0, 0, 0, addr, &mesh_dev_key);
 	if (err) {
 		FAIL("Provisioning failed (err %d)", err);
 		return;

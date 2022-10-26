@@ -399,9 +399,9 @@ static inline bool is_pb_gatt(void)
 static void prov_data(const uint8_t *data)
 {
 	PROV_BUF(msg, PDU_LEN_COMPLETE);
-	uint8_t session_key[16];
+	struct bt_mesh_key session_key;
 	uint8_t nonce[13];
-	uint8_t dev_key[16];
+	struct bt_mesh_key dev_key;
 	uint8_t pdu[25];
 	uint8_t flags;
 	uint32_t iv_index;
@@ -409,18 +409,17 @@ static void prov_data(const uint8_t *data)
 	uint16_t net_idx;
 	int err;
 	bool identity_enable;
+	struct bt_mesh_key net_key;
 
 	BT_DBG("");
 
 	err = bt_mesh_session_key(bt_mesh_prov_link.dhkey,
-				  bt_mesh_prov_link.prov_salt, session_key);
+				  bt_mesh_prov_link.prov_salt, &session_key);
 	if (err) {
 		BT_ERR("Unable to generate session key");
 		prov_fail(PROV_ERR_UNEXP_ERR);
 		return;
 	}
-
-	BT_DBG("SessionKey: %s", bt_hex(session_key, 16));
 
 	err = bt_mesh_prov_nonce(bt_mesh_prov_link.dhkey,
 				 bt_mesh_prov_link.prov_salt, nonce);
@@ -432,7 +431,7 @@ static void prov_data(const uint8_t *data)
 
 	BT_DBG("Nonce: %s", bt_hex(nonce, 13));
 
-	err = bt_mesh_prov_decrypt(session_key, nonce, data, pdu);
+	err = bt_mesh_prov_decrypt(&session_key, nonce, data, pdu);
 	if (err) {
 		BT_ERR("Unable to decrypt provisioning data");
 		prov_fail(PROV_ERR_DECRYPT);
@@ -440,14 +439,12 @@ static void prov_data(const uint8_t *data)
 	}
 
 	err = bt_mesh_dev_key(bt_mesh_prov_link.dhkey,
-			      bt_mesh_prov_link.prov_salt, dev_key);
+			      bt_mesh_prov_link.prov_salt, &dev_key);
 	if (err) {
 		BT_ERR("Unable to generate device key");
 		prov_fail(PROV_ERR_UNEXP_ERR);
 		return;
 	}
-
-	BT_DBG("DevKey: %s", bt_hex(dev_key, 16));
 
 	net_idx = sys_get_be16(&pdu[16]);
 	flags = pdu[18];
@@ -473,7 +470,13 @@ static void prov_data(const uint8_t *data)
 		identity_enable = false;
 	}
 
-	err = bt_mesh_provision(pdu, net_idx, flags, iv_index, addr, dev_key);
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, pdu, &net_key);
+	if (err) {
+		BT_ERR("Failed to import network key (err %d)", err);
+		return;
+	}
+
+	err = bt_mesh_provision(&net_key, net_idx, flags, iv_index, addr, &dev_key);
 	if (err) {
 		BT_ERR("Failed to provision (err %d)", err);
 		return;

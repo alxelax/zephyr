@@ -43,31 +43,31 @@ struct node_update {
 /* Node information for persistent storage. */
 struct node_val {
 	uint16_t net_idx;
-	uint8_t  num_elem;
-	uint8_t  flags;
+	uint8_t num_elem;
+	uint8_t flags;
 #define F_NODE_CONFIGURED 0x01
-	uint8_t  uuid[16];
-	uint8_t  dev_key[16];
+	uint8_t uuid[16];
+	struct bt_mesh_key dev_key;
 } __packed;
 
 /* NetKey storage information */
 struct net_key_val {
 	uint8_t kr_flag:1,
 		kr_phase:7;
-	uint8_t val[2][16];
+	struct bt_mesh_key val[2];
 } __packed;
 
 /* AppKey information for persistent storage. */
 struct app_key_val {
 	uint16_t net_idx;
-	bool     updated;
-	uint8_t  val[2][16];
+	bool updated;
+	struct bt_mesh_key val[2];
 } __packed;
 
 /* IV Index & IV Update information for persistent storage. */
 struct net_val {
 	uint32_t iv_index;
-	bool  iv_update;
+	bool iv_update;
 } __packed;
 
 static struct node_update cdb_node_updates[CONFIG_BT_MESH_CDB_NODE_COUNT];
@@ -242,7 +242,7 @@ static int cdb_node_set(const char *name, size_t len_rd,
 	}
 
 	memcpy(node->uuid, val.uuid, 16);
-	memcpy(node->dev_key, val.dev_key, 16);
+	memcpy(&node->dev_key, &val.dev_key, sizeof(struct bt_mesh_key));
 
 	BT_DBG("Node 0x%04x recovered from storage", addr);
 
@@ -287,8 +287,8 @@ static int cdb_subnet_set(const char *name, size_t len_rd,
 		BT_DBG("Updating existing NetKeyIndex 0x%03x", net_idx);
 
 		sub->kr_phase = key.kr_phase;
-		memcpy(sub->keys[0].net_key, &key.val[0], 16);
-		memcpy(sub->keys[1].net_key, &key.val[1], 16);
+		memcpy(&sub->keys[0].net_key, &key.val[0], sizeof(struct bt_mesh_key));
+		memcpy(&sub->keys[1].net_key, &key.val[1], sizeof(struct bt_mesh_key));
 
 		return 0;
 	}
@@ -300,8 +300,8 @@ static int cdb_subnet_set(const char *name, size_t len_rd,
 	}
 
 	sub->kr_phase = key.kr_phase;
-	memcpy(sub->keys[0].net_key, &key.val[0], 16);
-	memcpy(sub->keys[1].net_key, &key.val[1], 16);
+	memcpy(&sub->keys[0].net_key, &key.val[0], sizeof(struct bt_mesh_key));
+	memcpy(&sub->keys[1].net_key, &key.val[1], sizeof(struct bt_mesh_key));
 
 	BT_DBG("NetKeyIndex 0x%03x recovered from storage", net_idx);
 
@@ -351,8 +351,8 @@ static int cdb_app_key_set(const char *name, size_t len_rd,
 		return -ENOMEM;
 	}
 
-	memcpy(app->keys[0].app_key, key.val[0], 16);
-	memcpy(app->keys[1].app_key, key.val[1], 16);
+	memcpy(&app->keys[0].app_key, &key.val[0], sizeof(struct bt_mesh_key));
+	memcpy(&app->keys[1].app_key, &key.val[1], sizeof(struct bt_mesh_key));
 
 	BT_DBG("AppKeyIndex 0x%03x recovered from storage", app_idx);
 
@@ -415,7 +415,7 @@ static void store_cdb_node(const struct bt_mesh_cdb_node *node)
 	}
 
 	memcpy(val.uuid, node->uuid, 16);
-	memcpy(val.dev_key, node->dev_key, 16);
+	memcpy(&val.dev_key, &node->dev_key, sizeof(struct bt_mesh_key));
 
 	snprintk(path, sizeof(path), "bt/mesh/cdb/Node/%x", node->addr);
 
@@ -450,10 +450,10 @@ static void store_cdb_subnet(const struct bt_mesh_cdb_subnet *sub)
 	int err;
 
 	BT_DBG("NetKeyIndex 0x%03x NetKey %s", sub->net_idx,
-	       bt_hex(sub->keys[0].net_key, 16));
+	       bt_hex(&sub->keys[0].net_key, sizeof(struct bt_mesh_key)));
 
-	memcpy(&key.val[0], sub->keys[0].net_key, 16);
-	memcpy(&key.val[1], sub->keys[1].net_key, 16);
+	memcpy(&key.val[0], &sub->keys[0].net_key, sizeof(struct bt_mesh_key));
+	memcpy(&key.val[1], &sub->keys[1].net_key, sizeof(struct bt_mesh_key));
 	key.kr_flag = 0U; /* Deprecated */
 	key.kr_phase = sub->kr_phase;
 
@@ -491,8 +491,8 @@ static void store_cdb_app_key(const struct bt_mesh_cdb_app_key *app)
 
 	key.net_idx = app->net_idx;
 	key.updated = false;
-	memcpy(key.val[0], app->keys[0].app_key, 16);
-	memcpy(key.val[1], app->keys[1].app_key, 16);
+	memcpy(&key.val[0], &app->keys[0].app_key, sizeof(struct bt_mesh_key));
+	memcpy(&key.val[1], &app->keys[1].app_key, sizeof(struct bt_mesh_key));
 
 	snprintk(path, sizeof(path), "bt/mesh/cdb/AppKey/%x", app->app_idx);
 
@@ -677,7 +677,7 @@ static void update_cdb_app_key_settings(const struct bt_mesh_cdb_app_key *key,
 	schedule_cdb_store(BT_MESH_CDB_KEYS_PENDING);
 }
 
-int bt_mesh_cdb_create(const uint8_t key[16])
+int bt_mesh_cdb_create(const struct bt_mesh_key *key)
 {
 	struct bt_mesh_cdb_subnet *sub;
 
@@ -691,7 +691,7 @@ int bt_mesh_cdb_create(const uint8_t key[16])
 		return -ENOMEM;
 	}
 
-	memcpy(sub->keys[0].net_key, key, 16);
+	memcpy(&sub->keys[0].net_key, key, sizeof(struct bt_mesh_key));
 	bt_mesh_cdb.iv_index = 0;
 
 	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
@@ -858,7 +858,7 @@ void bt_mesh_cdb_node_del(struct bt_mesh_cdb_node *node, bool store)
 	}
 
 	node->addr = BT_MESH_ADDR_UNASSIGNED;
-	memset(node->dev_key, 0, sizeof(node->dev_key));
+	memset(&node->dev_key, 0, sizeof(node->dev_key));
 }
 
 struct bt_mesh_cdb_node *bt_mesh_cdb_node_get(uint16_t addr)

@@ -10,8 +10,15 @@
 #include "argparse.h"
 #include <bs_pc_backchannel.h>
 #include <time_machine.h>
-#include <psa/crypto.h>
 #include <zephyr/sys/byteorder.h>
+
+#if defined CONFIG_BT_MESH_USES_MBEDTLS_PSA
+#include <psa/crypto.h>
+#elif defined CONFIG_BT_MESH_USES_TINYCRYPT
+#include <tinycrypt/constants.h>
+#include <tinycrypt/ecc.h>
+#include <tinycrypt/ecc_dh.h>
+#endif
 
 #define LOG_MODULE_NAME mesh_prov
 
@@ -106,6 +113,26 @@ static void test_provisioner_init(void)
 	atomic_set_bit(flags, IS_PROVISIONER);
 	bt_mesh_test_cfg_set(NULL, WAIT_TIME);
 	k_work_init_delayable(&oob_timer, delayed_input);
+}
+
+static void self_provision(uint8_t flags)
+{
+	struct bt_mesh_key mesh_test_net_key;
+	struct bt_mesh_key mesh_test_dev_key;
+	int err;
+
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, test_net_key, &mesh_test_net_key);
+	if (err) {
+		FAIL("Unable to import network key (err: %d)", err);
+	}
+
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_DEV, dev_key, &mesh_test_dev_key);
+	if (err) {
+		FAIL("Unable to import device key (err: %d)", err);
+	}
+
+	ASSERT_OK(bt_mesh_cdb_create(&mesh_test_net_key));
+	ASSERT_OK(bt_mesh_provision(&mesh_test_net_key, 0, flags, 0, 0x0001, &mesh_test_dev_key));
 }
 
 static void test_terminate(void)
@@ -266,6 +293,7 @@ static void oob_auth_set(int test_step)
 	prov.input_actions = oob_auth_test_vector[test_step].input_actions;
 }
 
+#if defined CONFIG_BT_MESH_USES_MBEDTLS_PSA
 static void generate_oob_key_pair(void)
 {
 	psa_key_attributes_t key_attributes = PSA_KEY_ATTRIBUTES_INIT;
@@ -300,6 +328,12 @@ static void generate_oob_key_pair(void)
 
 	memcpy(public_key_be, public_key_repr + 1, 64);
 }
+#elif defined CONFIG_BT_MESH_USES_TINYCRYPT
+static void generate_oob_key_pair(void)
+{
+	ASSERT_TRUE(uECC_make_key(public_key_be, private_key_be, uECC_secp256r1()));
+}
+#endif
 
 static void oob_device(bool use_oob_pk)
 {
@@ -368,9 +402,7 @@ static void oob_provisioner(bool read_oob_pk, bool use_oob_pk)
 		LOG_HEXDUMP_INF(public_key_be, 64, "OOB Public Key:");
 	}
 
-	ASSERT_OK(bt_mesh_cdb_create(test_net_key));
-
-	ASSERT_OK(bt_mesh_provision(test_net_key, 0, 0, 0, 0x0001, dev_key));
+	self_provision(0);
 
 	for (int i = 0; i < ARRAY_SIZE(oob_auth_test_vector); i++) {
 		oob_auth_set(i);
@@ -440,9 +472,7 @@ static void test_provisioner_pb_adv_no_oob(void)
 
 	bt_mesh_device_setup(&prov, &comp);
 
-	ASSERT_OK(bt_mesh_cdb_create(test_net_key));
-
-	ASSERT_OK(bt_mesh_provision(test_net_key, 0, 0, 0, 0x0001, dev_key));
+	self_provision(0);
 
 	ASSERT_OK(k_sem_take(&prov_sem, K_SECONDS(5)));
 
@@ -492,9 +522,7 @@ static void test_provisioner_pb_adv_multi(void)
 
 	bt_mesh_device_setup(&prov, &comp);
 
-	ASSERT_OK(bt_mesh_cdb_create(test_net_key));
-
-	ASSERT_OK(bt_mesh_provision(test_net_key, 0, 0, 0, 0x0001, dev_key));
+	self_provision(0);
 
 	for (int i = 0; i < PROV_MULTI_COUNT; i++) {
 		ASSERT_OK(k_sem_take(&prov_sem, K_SECONDS(20)));
@@ -512,7 +540,7 @@ static void test_provisioner_iv_update_flag_zero(void)
 
 	bt_mesh_device_setup(&prov, &comp);
 
-	ASSERT_OK(bt_mesh_provision(test_net_key, 0, flags, 0, 0x0001, dev_key));
+	self_provision(flags);
 
 	if (bt_mesh.ivu_duration != 0) {
 		FAIL("IV Update duration counter is not 0 when IV Update flag is zero");
@@ -530,7 +558,7 @@ static void test_provisioner_iv_update_flag_one(void)
 
 	bt_mesh_device_setup(&prov, &comp);
 
-	ASSERT_OK(bt_mesh_provision(test_net_key, 0, flags, 0, 0x0001, dev_key));
+	self_provision(flags);
 
 	if (bt_mesh.ivu_duration != 96) {
 		FAIL("IV Update duration counter is not 96 when IV Update flag is one");
@@ -553,9 +581,7 @@ static void test_provisioner_pb_adv_reprovision(void)
 
 	bt_mesh_device_setup(&prov, &comp);
 
-	ASSERT_OK(bt_mesh_cdb_create(test_net_key));
-
-	ASSERT_OK(bt_mesh_provision(test_net_key, 0, 0, 0, 0x0001, dev_key));
+	self_provision(0);
 
 	for (int i = 0; i < PROV_REPROV_COUNT; i++) {
 		LOG_INF("Provisioner prov loop #%d, waiting for prov ...\n", i);

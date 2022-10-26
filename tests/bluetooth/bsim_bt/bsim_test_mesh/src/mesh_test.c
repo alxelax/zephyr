@@ -189,9 +189,25 @@ const uint8_t test_va_uuid[16] = "Mesh Label UUID";
 static void bt_mesh_device_provision_and_configure(void)
 {
 	uint8_t status;
+	struct bt_mesh_key mesh_test_net_key;
+	struct bt_mesh_key mesh_test_dev_key;
 	int err;
 
-	err = bt_mesh_provision(test_net_key, 0, 0, 0, cfg->addr, cfg->dev_key);
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, test_net_key, &mesh_test_net_key);
+	if (err == -EALREADY) {
+		LOG_INF("Using previously imported primary network key");
+	} else if (err) {
+		FAIL("Unable to import test network key (err: %d)", err);
+	}
+
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_DEV, cfg->dev_key, &mesh_test_dev_key);
+	if (err == -EALREADY) {
+		LOG_INF("Using previously imported device key");
+	} else if (err) {
+		FAIL("Unable to import test device key (err: %d)", err);
+	}
+
+	err = bt_mesh_provision(&mesh_test_net_key, 0, 0, 0, cfg->addr, &mesh_test_dev_key);
 	if (err == -EALREADY) {
 		LOG_INF("Using stored settings");
 		return;

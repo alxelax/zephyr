@@ -442,7 +442,7 @@ static int node_id_adv(struct bt_mesh_subnet *sub, int32_t duration)
 	memcpy(tmp + 6, proxy_svc_data + 11, 8);
 	sys_put_be16(bt_mesh_primary_addr(), tmp + 14);
 
-	err = bt_mesh_encrypt(sub->keys[SUBNET_KEY_TX_IDX(sub)].identity, tmp, tmp);
+	err = bt_mesh_encrypt(&sub->keys[SUBNET_KEY_TX_IDX(sub)].identity, tmp, tmp);
 	if (err) {
 		return err;
 	}

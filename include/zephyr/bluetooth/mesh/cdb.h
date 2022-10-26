@@ -8,6 +8,7 @@
 
 #include <inttypes.h>
 #include <zephyr/sys/atomic.h>
+#include <zephyr/bluetooth/mesh.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,11 +31,11 @@ enum {
 };
 
 struct bt_mesh_cdb_node {
-	uint8_t  uuid[16];
+	uint8_t uuid[16];
 	uint16_t addr;
 	uint16_t net_idx;
-	uint8_t  num_elem;
-	uint8_t  dev_key[16];
+	uint8_t num_elem;
+	struct bt_mesh_key dev_key;
 
 	ATOMIC_DEFINE(flags, BT_MESH_CDB_NODE_FLAG_COUNT);
 };
@@ -45,7 +46,7 @@ struct bt_mesh_cdb_subnet {
 	uint8_t kr_phase;
 
 	struct {
-		uint8_t net_key[16];
+		struct bt_mesh_key net_key;
 	} keys[2];
 };
 
@@ -54,7 +55,7 @@ struct bt_mesh_cdb_app_key {
 	uint16_t app_idx;
 
 	struct {
-		uint8_t app_key[16];
+		struct bt_mesh_key app_key;
 	} keys[2];
 };
 
@@ -90,7 +91,7 @@ extern struct bt_mesh_cdb bt_mesh_cdb;
  *
  *  @return 0 on success or negative error code on failure.
  */
-int bt_mesh_cdb_create(const uint8_t key[16]);
+int bt_mesh_cdb_create(const struct bt_mesh_key *key);
 
 /** @brief Clear the Mesh Configuration Database.
  *

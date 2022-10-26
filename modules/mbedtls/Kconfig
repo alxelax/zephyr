@@ -239,4 +239,34 @@ config MBEDTLS_PSA_EXTERNAL_ENTROPY
 	  This option mandates to have random numbers generator
 	  with cryptographic quality and high performance.
 
+config MBEDTLS_PSA_KEY_SLOT_COUNT
+	int "Maximum number of simultaneously loaded keys"
+	depends on MBEDTLS_PSA
+	default 32
+	help
+	  Restrict the PSA library to supporting a maximum amount of simultaneously
+	  loaded keys. A loaded key is a key stored by the PSA Crypto core as a
+	  volatile key, or a persistent key which is loaded temporarily by the
+	  library as part of a crypto operation in flight.
+
+config MBEDTLS_PSA_CRYPTO_STORAGE_C
+	bool "The Platform Security Architecture persistent storage"
+	depends on MBEDTLS_PSA
+	help
+	  Enable the Platform Security Architecture storage area
+	  for keys with persistent life time.
+
+config MBEDTLS_PSA_ITS_FILE_C
+	bool "The Internal Trusted Storage"
+	depends on MBEDTLS_PSA_CRYPTO_STORAGE_C
+	help
+	  Enable the emulation of the Platform Security Architecture
+	  Internal Trusted Storage (PSA ITS) over files.
+
+config MBEDTLS_FS_IO
+	bool "The file system IO for PSA ITS"
+	depends on MBEDTLS_PSA_ITS_FILE_C
+	help
+	  Enable POSIX IO file functions for PSA ITS.
+
 endif # MBEDTLS

@@ -1162,7 +1162,12 @@ static int cmd_net_key_add(const struct shell *shell, size_t argc, char *argv[])
 				return 0;
 			}
 
-			memcpy(key_val, subnet->keys[0].net_key, 16);
+			if (bt_mesh_key_export(key_val, subnet->keys[0].net_key)) {
+				shell_error(shell,
+					    "Unable to export key from subnet 0x%03x",
+					    key_net_idx);
+				return 0;
+			}
 		} else {
 			subnet = bt_mesh_cdb_subnet_alloc(key_net_idx);
 			if (!subnet) {
@@ -1171,7 +1176,13 @@ static int cmd_net_key_add(const struct shell *shell, size_t argc, char *argv[])
 				return 0;
 			}
 
-			memcpy(subnet->keys[0].net_key, key_val, 16);
+			if (bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, key_val,
+					&subnet->keys[0].net_key)) {
+				shell_error(shell,
+					    "Unable to import key into subnet 0x%03x",
+					    key_net_idx);
+				return 0;
+			}
 			bt_mesh_cdb_subnet_store(subnet);
 		}
 	}
@@ -1326,7 +1337,12 @@ static int cmd_app_key_add(const struct shell *shell, size_t argc, char *argv[])
 				return 0;
 			}
 
-			memcpy(key_val, app_key->keys[0].app_key, 16);
+			if (bt_mesh_key_export(key_val, app_key->keys[0].app_key)) {
+				shell_error(shell,
+					    "Unable to export app key 0x%03x",
+					    key_app_idx);
+				return 0;
+			}
 		} else {
 			app_key = bt_mesh_cdb_app_key_alloc(key_net_idx,
 							    key_app_idx);
@@ -1336,7 +1352,14 @@ static int cmd_app_key_add(const struct shell *shell, size_t argc, char *argv[])
 				return 0;
 			}
 
-			memcpy(app_key->keys[0].app_key, key_val, 16);
+			if (bt_mesh_key_import(BT_MESH_KEY_TYPE_APP, key_val,
+					&app_key->keys[0].app_key)) {
+				shell_error(shell,
+					    "Unable to import app key 0x%03x",
+					    key_app_idx);
+				return 0;
+			}
+
 			bt_mesh_cdb_app_key_store(app_key);
 		}
 	}
@@ -2523,7 +2546,8 @@ static int cmd_provision_adv(const struct shell *shell, size_t argc,
 
 static int cmd_provision(const struct shell *shell, size_t argc, char *argv[])
 {
-	const uint8_t *net_key = default_key;
+	struct bt_mesh_key net_key;
+	struct bt_mesh_key dev_key;
 	uint16_t net_idx, addr;
 	uint32_t iv_index;
 	int err = 0;
@@ -2552,11 +2576,23 @@ static int cmd_provision(const struct shell *shell, size_t argc, char *argv[])
 			return 0;
 		}
 
-		net_key = sub->keys[SUBNET_KEY_TX_IDX(sub)].net_key;
+		memcpy(&net_key,
+			&sub->keys[SUBNET_KEY_TX_IDX(sub)].net_key, sizeof(struct bt_mesh_key));
+	} else {
+		if (bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, default_key, &net_key)) {
+			shell_error(shell, "Unable to import key for subnet 0x%03x",
+				    net_idx);
+			return 0;
+		}
 	}
 
-	err = bt_mesh_provision(net_key, net_idx, 0, iv_index, addr,
-				default_key);
+	if (bt_mesh_key_import(BT_MESH_KEY_TYPE_DEV, default_key, &dev_key)) {
+		shell_error(shell, "Unable to import default key");
+		bt_mesh_key_destroy(&net_key);
+		return 0;
+	}
+
+	err = bt_mesh_provision(&net_key, net_idx, 0, iv_index, addr, &dev_key);
 	if (err) {
 		shell_error(shell, "Provisioning failed (err %d)", err);
 	}
@@ -3020,19 +3056,22 @@ static int cmd_del_fault(const struct shell *shell, size_t argc, char *argv[])
 static int cmd_cdb_create(const struct shell *shell, size_t argc,
 			  char *argv[])
 {
-	uint8_t net_key[16];
+	uint8_t raw_net_key[16];
+	struct bt_mesh_key net_key;
 	size_t len;
 	int err;
 
 	if (argc < 2) {
-		bt_rand(net_key, 16);
+		bt_rand(raw_net_key, 16);
 	} else {
-		len = hex2bin(argv[1], strlen(argv[1]), net_key,
-			      sizeof(net_key));
-		memset(net_key + len, 0, sizeof(net_key) - len);
+		len = hex2bin(argv[1], strlen(argv[1]), raw_net_key,
+			      sizeof(raw_net_key));
+		memset(raw_net_key + len, 0, sizeof(raw_net_key) - len);
 	}
 
-	err = bt_mesh_cdb_create(net_key);
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, raw_net_key, &net_key);
+
+	err = bt_mesh_cdb_create(&net_key);
 	if (err < 0) {
 		shell_print(shell, "Failed to create CDB (err %d)", err);
 	}
@@ -3056,6 +3095,7 @@ static void cdb_print_nodes(const struct shell *shell)
 	struct bt_mesh_cdb_node *node;
 	int i, total = 0;
 	bool configured;
+	uint8_t raw_dev_key[16];
 
 	shell_print(shell, "Address  Elements  Flags  %-32s  DevKey", "UUID");
 
@@ -3070,7 +3110,12 @@ static void cdb_print_nodes(const struct shell *shell)
 
 		total++;
 		bin2hex(node->uuid, 16, uuid_hex_str, sizeof(uuid_hex_str));
-		bin2hex(node->dev_key, 16, key_hex_str, sizeof(key_hex_str));
+		if (bt_mesh_key_export(raw_dev_key, node->dev_key)) {
+			shell_error(shell, "Unable to export key from node 0x%04x", node->addr);
+			continue;
+		}
+
+		bin2hex(raw_dev_key, 16, key_hex_str, sizeof(key_hex_str));
 		shell_print(shell, "0x%04x   %-8d  %-5s  %s  %s", node->addr,
 			    node->num_elem, configured ? "C" : "-",
 			    uuid_hex_str, key_hex_str);
@@ -3082,6 +3127,7 @@ static void cdb_print_nodes(const struct shell *shell)
 static void cdb_print_subnets(const struct shell *shell)
 {
 	struct bt_mesh_cdb_subnet *subnet;
+	uint8_t raw_key[16];
 	char key_hex_str[32 + 1];
 	int i, total = 0;
 
@@ -3093,8 +3139,14 @@ static void cdb_print_subnets(const struct shell *shell)
 			continue;
 		}
 
+		if (bt_mesh_key_export(raw_key, subnet->keys[0].net_key)) {
+			shell_error(shell, "Unable to export key from subnet 0x%03x",
+					subnet->net_idx);
+			continue;
+		}
+
 		total++;
-		bin2hex(subnet->keys[0].net_key, 16, key_hex_str,
+		bin2hex(raw_key, sizeof(raw_key), key_hex_str,
 			sizeof(key_hex_str));
 		shell_print(shell, "0x%03x   %s", subnet->net_idx,
 			    key_hex_str);
@@ -3106,6 +3158,7 @@ static void cdb_print_subnets(const struct shell *shell)
 static void cdb_print_app_keys(const struct shell *shell)
 {
 	struct bt_mesh_cdb_app_key *app_key;
+	uint8_t raw_key[16];
 	char key_hex_str[32 + 1];
 	int i, total = 0;
 
@@ -3117,8 +3170,14 @@ static void cdb_print_app_keys(const struct shell *shell)
 			continue;
 		}
 
+		if (bt_mesh_key_export(raw_key, app_key->keys[0].app_key)) {
+			shell_error(shell, "Unable to export app key 0x%03x",
+					app_key->app_idx);
+			continue;
+		}
+
 		total++;
-		bin2hex(app_key->keys[0].app_key, 16, key_hex_str,
+		bin2hex(raw_key, sizeof(raw_key), key_hex_str,
 			sizeof(key_hex_str));
 		shell_print(shell, "0x%03x   0x%03x   %s",
 			    app_key->net_idx, app_key->app_idx, key_hex_str);
@@ -3151,7 +3210,8 @@ static int cmd_cdb_node_add(const struct shell *shell, size_t argc,
 			    char *argv[])
 {
 	struct bt_mesh_cdb_node *node;
-	uint8_t uuid[16], dev_key[16];
+	uint8_t uuid[16];
+	uint8_t dev_key[16];
 	uint16_t addr, net_idx;
 	uint8_t num_elem;
 	size_t len;
@@ -3182,7 +3242,11 @@ static int cmd_cdb_node_add(const struct shell *shell, size_t argc,
 		return 0;
 	}
 
-	memcpy(node->dev_key, dev_key, 16);
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_DEV, dev_key, &node->dev_key);
+	if (err) {
+		shell_warn(shell, "Unable to import device key into crypto library");
+		return err;
+	}
 
 	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
 		bt_mesh_cdb_node_store(node);
@@ -3223,7 +3287,8 @@ static int cmd_cdb_subnet_add(const struct shell *shell, size_t argc,
 			     char *argv[])
 {
 	struct bt_mesh_cdb_subnet *sub;
-	uint8_t net_key[16];
+	uint8_t raw_key[16];
+	struct bt_mesh_key net_key;
 	uint16_t net_idx;
 	size_t len;
 	int err = 0;
@@ -3235,11 +3300,11 @@ static int cmd_cdb_subnet_add(const struct shell *shell, size_t argc,
 	}
 
 	if (argc < 3) {
-		bt_rand(net_key, 16);
+		bt_rand(raw_key, sizeof(raw_key));
 	} else {
-		len = hex2bin(argv[2], strlen(argv[2]), net_key,
-			      sizeof(net_key));
-		memset(net_key + len, 0, sizeof(net_key) - len);
+		len = hex2bin(argv[2], strlen(argv[2]), raw_key,
+			      sizeof(raw_key));
+		memset(raw_key + len, 0, sizeof(raw_key) - len);
 	}
 
 	sub = bt_mesh_cdb_subnet_alloc(net_idx);
@@ -3248,7 +3313,11 @@ static int cmd_cdb_subnet_add(const struct shell *shell, size_t argc,
 		return 0;
 	}
 
-	memcpy(sub->keys[0].net_key, net_key, 16);
+	if (bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, raw_key, &net_key)) {
+		shell_error(shell, "Unable to import key for subnet 0x%03x", net_idx);
+		return 0;
+	}
+	memcpy(&sub->keys[0].net_key, &net_key, sizeof(struct bt_mesh_key));
 
 	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
 		bt_mesh_cdb_subnet_store(sub);
@@ -3278,6 +3347,8 @@ static int cmd_cdb_subnet_del(const struct shell *shell, size_t argc,
 		return 0;
 	}
 
+	bt_mesh_key_destroy(sub->keys[0].net_key);
+	bt_mesh_key_destroy(sub->keys[1].net_key);
 	bt_mesh_cdb_subnet_del(sub, true);
 
 	shell_print(shell, "Deleted subnet 0x%03x", net_idx);
@@ -3290,7 +3361,8 @@ static int cmd_cdb_app_key_add(const struct shell *shell, size_t argc,
 {
 	struct bt_mesh_cdb_app_key *key;
 	uint16_t net_idx, app_idx;
-	uint8_t app_key[16];
+	uint8_t raw_key[16];
+	struct bt_mesh_key app_key;
 	size_t len;
 	int err = 0;
 
@@ -3302,11 +3374,11 @@ static int cmd_cdb_app_key_add(const struct shell *shell, size_t argc,
 	}
 
 	if (argc < 4) {
-		bt_rand(app_key, 16);
+		bt_rand(raw_key, 16);
 	} else {
-		len = hex2bin(argv[3], strlen(argv[3]), app_key,
-			      sizeof(app_key));
-		memset(app_key + len, 0, sizeof(app_key) - len);
+		len = hex2bin(argv[3], strlen(argv[3]), raw_key,
+			      sizeof(raw_key));
+		memset(raw_key + len, 0, sizeof(raw_key) - len);
 	}
 
 	key = bt_mesh_cdb_app_key_alloc(net_idx, app_idx);
@@ -3315,7 +3387,11 @@ static int cmd_cdb_app_key_add(const struct shell *shell, size_t argc,
 		return 0;
 	}
 
-	memcpy(key->keys[0].app_key, app_key, 16);
+	if (bt_mesh_key_import(BT_MESH_KEY_TYPE_APP, raw_key, &app_key)) {
+		shell_error(shell, "Unable to import app key 0x%03x", app_idx);
+		return 0;
+	}
+	memcpy(&key->keys[0].app_key, &app_key, sizeof(struct bt_mesh_key));
 
 	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
 		bt_mesh_cdb_app_key_store(key);
@@ -3345,6 +3421,8 @@ static int cmd_cdb_app_key_del(const struct shell *shell, size_t argc,
 		return 0;
 	}
 
+	bt_mesh_key_destroy(key->keys[0].app_key);
+	bt_mesh_key_destroy(key->keys[1].app_key);
 	bt_mesh_cdb_app_key_del(key, true);
 
 	shell_print(shell, "Deleted AppKey 0x%03x", app_idx);

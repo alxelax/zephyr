@@ -284,7 +284,7 @@ static bool auth_match(struct bt_mesh_subnet_keys *keys,
 		return false;
 	}
 
-	bt_mesh_beacon_auth(keys->beacon, params->flags, keys->net_id,
+	bt_mesh_beacon_auth(&keys->beacon, params->flags, keys->net_id,
 			    params->iv_index, net_auth);
 
 	if (memcmp(params->auth, net_auth, 8)) {
@@ -419,7 +419,7 @@ void bt_mesh_beacon_update(struct bt_mesh_subnet *sub)
 	       SUBNET_KEY_TX_IDX(sub) ? "new" : "current");
 	BT_DBG("flags 0x%02x, IVI 0x%08x", flags, bt_mesh.iv_index);
 
-	err = bt_mesh_beacon_auth(keys->beacon, flags, keys->net_id,
+	err = bt_mesh_beacon_auth(&keys->beacon, flags, keys->net_id,
 				   bt_mesh.iv_index, sub->auth);
 	if (err) {
 		BT_ERR("Failed updating net beacon for 0x%03x", sub->net_idx);

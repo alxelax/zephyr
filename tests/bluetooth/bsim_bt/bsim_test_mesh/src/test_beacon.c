@@ -12,6 +12,7 @@
 #include "mesh/mesh.h"
 #include "mesh/foundation.h"
 #include "mesh/crypto.h"
+#include "mesh/keys.h"
 
 #define LOG_MODULE_NAME test_beacon
 
@@ -351,10 +352,10 @@ static void send_beacon(struct net_buf_simple *buf)
 	}
 }
 
-static void beacon_create(struct net_buf_simple *buf, const uint8_t *net_key, uint8_t flags,
-			  uint32_t iv_index)
+static void beacon_create(struct net_buf_simple *buf, const uint8_t net_key[16],
+			  uint8_t flags, uint32_t iv_index)
 {
-	uint8_t beacon_key[16];
+	struct bt_mesh_key beacon_key;
 	uint8_t net_id[8];
 	uint8_t auth[8];
 	int err;
@@ -364,14 +365,19 @@ static void beacon_create(struct net_buf_simple *buf, const uint8_t *net_key, ui
 		FAIL("Unable to generate Net ID");
 	}
 
-	err = bt_mesh_beacon_key(net_key, beacon_key);
+	err = bt_mesh_beacon_key(net_key, &beacon_key);
 	if (err) {
 		FAIL("Unable to generate beacon key");
 	}
 
-	err = bt_mesh_beacon_auth(beacon_key, flags, net_id, iv_index, auth);
+	err = bt_mesh_beacon_auth(&beacon_key, flags, net_id, iv_index, auth);
 	if (err) {
 		FAIL("Unable to generate auth value");
+	}
+
+	err = bt_mesh_key_destroy(&beacon_key);
+	if (err) {
+		FAIL("Unable to destroy beacon key");
 	}
 
 	net_buf_simple_reset(buf);

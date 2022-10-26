@@ -40,10 +40,11 @@
 #include "mesh.h"
 #include "gatt_cli.h"
 #include "crypto.h"
+#include "keys.h"
 
-int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
+int bt_mesh_provision(const struct bt_mesh_key *net_key, uint16_t net_idx,
 		      uint8_t flags, uint32_t iv_index, uint16_t addr,
-		      const uint8_t dev_key[16])
+		      const struct bt_mesh_key *dev_key)
 {
 	int err;
 	struct bt_mesh_cdb_subnet *subnet = NULL;
@@ -86,10 +87,10 @@ int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
 		}
 
 		if (BT_MESH_KEY_REFRESH(flags)) {
-			memcpy(subnet->keys[1].net_key, net_key, 16);
+			memcpy(&subnet->keys[1].net_key, net_key, sizeof(struct bt_mesh_key));
 			subnet->kr_phase = BT_MESH_KR_PHASE_2;
 		} else {
-			memcpy(subnet->keys[0].net_key, net_key, 16);
+			memcpy(&subnet->keys[0].net_key, net_key, sizeof(struct bt_mesh_key));
 			subnet->kr_phase = BT_MESH_KR_NORMAL;
 		}
 		bt_mesh_cdb_subnet_store(subnet);
@@ -97,7 +98,7 @@ int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
 		addr = node->addr;
 		bt_mesh_cdb_iv_update(iv_index, BT_MESH_IV_UPDATE(flags));
 
-		memcpy(node->dev_key, dev_key, 16);
+		memcpy(&node->dev_key, dev_key, sizeof(struct bt_mesh_key));
 
 		if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
 			bt_mesh_cdb_node_store(node);
@@ -116,7 +117,7 @@ int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
 
 	bt_mesh_comp_provision(addr);
 
-	memcpy(bt_mesh.dev_key, dev_key, 16);
+	memcpy(&bt_mesh.dev_key, dev_key, sizeof(struct bt_mesh_key));
 
 	if (IS_ENABLED(CONFIG_BT_MESH_LOW_POWER) &&
 	    IS_ENABLED(CONFIG_BT_MESH_LPN_SUB_ALL_NODES_ADDR)) {
@@ -223,7 +224,8 @@ void bt_mesh_reset(void)
 		bt_mesh_net_clear();
 	}
 
-	(void)memset(bt_mesh.dev_key, 0, sizeof(bt_mesh.dev_key));
+	bt_mesh_key_destroy(&bt_mesh.dev_key);
+	memset(&bt_mesh.dev_key, 0, sizeof(bt_mesh.dev_key));
 
 	bt_mesh_scan_disable();
 	bt_mesh_beacon_disable();

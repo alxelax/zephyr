@@ -37,6 +37,7 @@
 #include "settings.h"
 #include "prov.h"
 #include "cfg.h"
+#include "keys.h"
 
 #define LOOPBACK_MAX_PDU_LEN (BT_MESH_NET_HDR_LEN + 16)
 
@@ -60,8 +61,8 @@
 
 /* Mesh network information for persistent storage. */
 struct net_val {
-	uint16_t primary_addr;
-	uint8_t  dev_key[16];
+	uint16_t   primary_addr;
+	struct bt_mesh_key dev_key;
 } __packed;
 
 /* Sequence number information for persistent storage. */
@@ -73,7 +74,7 @@ struct seq_val {
 struct iv_val {
 	uint32_t iv_index;
 	uint8_t  iv_update:1,
-	      iv_duration:7;
+		 iv_duration:7;
 } __packed;
 
 static struct {
@@ -172,14 +173,14 @@ static void store_seq(void)
 	bt_mesh_settings_store_schedule(BT_MESH_SETTINGS_SEQ_PENDING);
 }
 
-int bt_mesh_net_create(uint16_t idx, uint8_t flags, const uint8_t key[16],
-		       uint32_t iv_index)
+int bt_mesh_net_create(uint16_t idx, uint8_t flags, const struct bt_mesh_key *key,
+		uint32_t iv_index)
 {
 	int err;
 
 	BT_DBG("idx %u flags 0x%02x iv_index %u", idx, flags, iv_index);
 
-	BT_DBG("NetKey %s", bt_hex(key, 16));
+	BT_DBG("NetKey %s", bt_hex(key, sizeof(struct bt_mesh_key)));
 
 	if (BT_MESH_KEY_REFRESH(flags)) {
 		err = bt_mesh_subnet_set(idx, BT_MESH_KR_PHASE_2, NULL, key);
@@ -447,12 +448,12 @@ static int net_encrypt(struct net_buf_simple *buf,
 {
 	int err;
 
-	err = bt_mesh_net_encrypt(cred->enc, buf, iv_index, proxy);
+	err = bt_mesh_net_encrypt(&cred->enc, buf, iv_index, proxy);
 	if (err) {
 		return err;
 	}
 
-	return bt_mesh_net_obfuscate(buf->data, iv_index, cred->privacy);
+	return bt_mesh_net_obfuscate(buf->data, iv_index, &cred->privacy);
 }
 
 int bt_mesh_net_encode(struct bt_mesh_net_tx *tx, struct net_buf_simple *buf,
@@ -609,7 +610,7 @@ static bool net_decrypt(struct bt_mesh_net_rx *rx, struct net_buf_simple *in,
 	net_buf_simple_add_mem(out, in->data, in->len);
 
 	if (bt_mesh_net_obfuscate(out->data, BT_MESH_NET_IVI_RX(rx),
-				  cred->privacy)) {
+				  &cred->privacy)) {
 		return false;
 	}
 
@@ -631,7 +632,7 @@ static bool net_decrypt(struct bt_mesh_net_rx *rx, struct net_buf_simple *in,
 
 	BT_DBG("src 0x%04x", rx->ctx.addr);
 
-	return bt_mesh_net_decrypt(cred->enc, out, BT_MESH_NET_IVI_RX(rx),
+	return bt_mesh_net_decrypt(&cred->enc, out, BT_MESH_NET_IVI_RX(rx),
 				   proxy) == 0;
 }
 
@@ -920,7 +921,8 @@ static int net_set(const char *name, size_t len_rd, settings_read_cb read_cb,
 		BT_DBG("val (null)");
 
 		bt_mesh_comp_unprovision();
-		(void)memset(bt_mesh.dev_key, 0, sizeof(bt_mesh.dev_key));
+		bt_mesh_key_destroy(&bt_mesh.dev_key);
+		memset(&bt_mesh.dev_key, 0, sizeof(struct bt_mesh_key));
 		return 0;
 	}
 
@@ -930,11 +932,11 @@ static int net_set(const char *name, size_t len_rd, settings_read_cb read_cb,
 		return err;
 	}
 
-	memcpy(bt_mesh.dev_key, net.dev_key, sizeof(bt_mesh.dev_key));
+	memcpy(&bt_mesh.dev_key, &net.dev_key, sizeof(struct bt_mesh_key));
 	bt_mesh_comp_provision(net.primary_addr);
 
 	BT_DBG("Provisioned with primary address 0x%04x", net.primary_addr);
-	BT_DBG("Recovered DevKey %s", bt_hex(bt_mesh.dev_key, 16));
+	BT_DBG("Recovered DevKey %s", bt_hex(&bt_mesh.dev_key, sizeof(struct bt_mesh_key)));
 
 	return 0;
 }
@@ -1067,10 +1069,10 @@ static void store_pending_net(void)
 	int err;
 
 	BT_DBG("addr 0x%04x DevKey %s", bt_mesh_primary_addr(),
-	       bt_hex(bt_mesh.dev_key, 16));
+	       bt_hex(&bt_mesh.dev_key, sizeof(struct bt_mesh_key)));
 
 	net.primary_addr = bt_mesh_primary_addr();
-	memcpy(net.dev_key, bt_mesh.dev_key, 16);
+	memcpy(&net.dev_key, &bt_mesh.dev_key, sizeof(struct bt_mesh_key));
 
 	err = settings_save_one("bt/mesh/Net", &net, sizeof(net));
 	if (err) {

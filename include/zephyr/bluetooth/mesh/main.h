@@ -418,9 +418,9 @@ int bt_mesh_prov_disable(bt_mesh_prov_bearer_t bearers);
  *
  *  @return Zero on success or (negative) error code otherwise.
  */
-int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
+int bt_mesh_provision(const struct bt_mesh_key *net_key, uint16_t net_idx,
 		      uint8_t flags, uint32_t iv_index, uint16_t addr,
-		      const uint8_t dev_key[16]);
+		      const struct bt_mesh_key *dev_key);
 
 /** @brief Provision a Mesh Node using PB-ADV
  *

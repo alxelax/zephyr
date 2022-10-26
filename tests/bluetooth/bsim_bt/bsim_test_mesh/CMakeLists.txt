@@ -36,6 +36,12 @@ else()
  )
 endif()
 
+if(CONFIG_SETTINGS AND CONFIG_BT_MESH_USES_MBEDTLS_PSA)
+ target_sources(app PRIVATE
+  src/distribute_keyid.c
+ )
+endif()
+
 zephyr_include_directories(
   $ENV{BSIM_COMPONENTS_PATH}/libUtilv1/src/
   $ENV{BSIM_COMPONENTS_PATH}/libPhyComv1/src/

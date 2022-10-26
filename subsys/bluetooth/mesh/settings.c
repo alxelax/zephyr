@@ -10,6 +10,7 @@
 #include <zephyr/sys/util.h>
 
 #include <zephyr/settings/settings.h>
+#include <zephyr/bluetooth/mesh.h>
 
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_MESH_DEBUG_SETTINGS)
 #define LOG_MODULE_NAME bt_mesh_settings
