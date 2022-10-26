@@ -5,10 +5,12 @@
  */
 #include "mesh_test.h"
 #include "settings_test_backend.h"
+#include "distribute_keyid.h"
 #include "mesh/mesh.h"
 #include "mesh/net.h"
 #include "mesh/rpl.h"
 #include "mesh/transport.h"
+#include "mesh/crypto.h"
 
 #define LOG_MODULE_NAME test_rpc
 
@@ -31,6 +33,14 @@ static const struct bt_mesh_test_cfg rx_cfg = {
 static uint8_t test_data[TEST_DATA_SIZE];
 static uint8_t rx_cnt;
 static bool is_tx_succeeded;
+
+static void host_files_remove(void)
+{
+	/* crypto library initialization to be able to remove stored keys. */
+	bt_mesh_crypto_init();
+	stored_keys_clear();
+	settings_test_backend_clear();
+}
 
 static void test_tx_init(void)
 {
@@ -79,7 +89,7 @@ static void rx_ended(uint8_t *data, size_t len)
 
 static void test_tx_immediate_replay_attack(void)
 {
-	settings_test_backend_clear();
+	host_files_remove();
 	bt_mesh_test_setup();
 
 	static const struct bt_mesh_send_cb send_cb = {
@@ -127,7 +137,7 @@ static void test_tx_immediate_replay_attack(void)
 
 static void test_rx_immediate_replay_attack(void)
 {
-	settings_test_backend_clear();
+	host_files_remove();
 	bt_mesh_test_setup();
 	bt_mesh_test_ra_cb_setup(rx_ended);
 
@@ -140,7 +150,7 @@ static void test_rx_immediate_replay_attack(void)
 
 static void test_tx_power_replay_attack(void)
 {
-	settings_test_backend_clear();
+	host_files_remove();
 	bt_mesh_test_setup();
 
 	static const struct bt_mesh_send_cb send_cb = {
@@ -271,7 +281,7 @@ static bool ivi_update_toggle(void)
 
 static void test_rx_rpl_frag(void)
 {
-	settings_test_backend_clear();
+	host_files_remove();
 	bt_mesh_test_setup();
 
 	k_sleep(K_SECONDS(10));
@@ -337,7 +347,7 @@ static void test_rx_rpl_frag(void)
 
 static void test_tx_rpl_frag(void)
 {
-	settings_test_backend_clear();
+	host_files_remove();
 	bt_mesh_test_setup();
 
 	k_sleep(K_SECONDS(10));

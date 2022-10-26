@@ -33,8 +33,8 @@ struct bt_mesh_net_cred;
 struct bt_mesh_node {
 	uint16_t addr;
 	uint16_t net_idx;
-	uint8_t  dev_key[16];
-	uint8_t  num_elem;
+	struct bt_mesh_key dev_key;
+	uint8_t num_elem;
 };
 
 #if defined(CONFIG_BT_MESH_FRIEND)
@@ -213,7 +213,7 @@ struct bt_mesh_net {
 	/* Timer to track duration in current IV Update state */
 	struct k_work_delayable ivu_timer;
 
-	uint8_t dev_key[16];
+	struct bt_mesh_key dev_key;
 };
 
 /* Network interface */
@@ -259,7 +259,7 @@ extern struct bt_mesh_net bt_mesh;
 
 #define BT_MESH_NET_HDR_LEN 9
 
-int bt_mesh_net_create(uint16_t idx, uint8_t flags, const uint8_t key[16],
+int bt_mesh_net_create(uint16_t idx, uint8_t flags, const struct bt_mesh_key *key,
 		       uint32_t iv_index);
 
 bool bt_mesh_net_iv_update(uint32_t iv_index, bool iv_update);

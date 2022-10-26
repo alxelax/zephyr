@@ -252,6 +252,12 @@ static void clear_friendship(bool force, bool disable)
 		}
 	}
 
+	for (int i = 0; i < ARRAY_SIZE(lpn->cred); i++) {
+		if (lpn->sub->keys[i].valid) {
+			bt_mesh_friend_cred_destroy(&lpn->cred[i]);
+		}
+	}
+
 	lpn->frnd = BT_MESH_ADDR_UNASSIGNED;
 	lpn->fsn = 0U;
 	lpn->req_attempts = 0U;
@@ -551,7 +557,7 @@ void bt_mesh_lpn_msg_received(struct bt_mesh_net_rx *rx)
 }
 
 static int friend_cred_create(struct bt_mesh_net_cred *cred,
-			      const uint8_t key[16])
+			      const struct bt_mesh_key *key)
 {
 	struct bt_mesh_lpn *lpn = &bt_mesh.lpn;
 
@@ -600,7 +606,7 @@ int bt_mesh_lpn_friend_offer(struct bt_mesh_net_rx *rx,
 			continue;
 		}
 
-		err = friend_cred_create(&lpn->cred[i], lpn->sub->keys[i].net);
+		err = friend_cred_create(&lpn->cred[i], &lpn->sub->keys[i].net);
 		if (err) {
 			lpn->frnd = BT_MESH_ADDR_UNASSIGNED;
 			return err;
@@ -615,6 +621,12 @@ int bt_mesh_lpn_friend_offer(struct bt_mesh_net_rx *rx,
 	err = send_friend_poll();
 	if (err) {
 		/* Will retry sending later */
+		for (int i = 0; i < ARRAY_SIZE(lpn->cred); i++) {
+			if (lpn->sub->keys[i].valid) {
+				bt_mesh_friend_cred_destroy(&lpn->cred[i]);
+			}
+		}
+
 		lpn->sub = NULL;
 		lpn->frnd = BT_MESH_ADDR_UNASSIGNED;
 		lpn->recv_win = 0U;
@@ -1087,7 +1099,7 @@ static void subnet_evt(struct bt_mesh_subnet *sub, enum bt_mesh_key_evt evt)
 		break;
 	case BT_MESH_KEY_UPDATED:
 		BT_DBG("NetKey updated");
-		friend_cred_create(&bt_mesh.lpn.cred[1], sub->keys[1].net);
+		friend_cred_create(&bt_mesh.lpn.cred[1], &sub->keys[1].net);
 		break;
 	default:
 		break;

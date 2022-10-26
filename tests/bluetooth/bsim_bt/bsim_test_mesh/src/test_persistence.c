@@ -6,11 +6,13 @@
 
 #include "mesh_test.h"
 #include "settings_test_backend.h"
+#include "distribute_keyid.h"
 #include <zephyr/bluetooth/mesh.h>
 #include <zephyr/sys/reboot.h>
 #include "mesh/net.h"
 #include "mesh/app_keys.h"
 #include "mesh/crypto.h"
+#include "mesh/keys.h"
 #include <bs_cmd_line.h>
 
 #define LOG_MODULE_NAME test_persistence
@@ -42,7 +44,9 @@ static int test_ividx = 0x123456;
 static uint8_t test_flags;
 static uint8_t test_netkey_idx = 0x77;
 static uint8_t test_netkey[16] = { 0xaa };
+static struct bt_mesh_key mesh_test_net_key;
 static uint8_t test_devkey[16] = { 0xdd };
+static struct bt_mesh_key mesh_test_dev_key;
 static uint8_t test_prov_devkey[16] = { 0x11 };
 
 #define TEST_GROUP_0 0xc001
@@ -250,6 +254,14 @@ static void test_args_parse(int argc, char *argv[])
 
 static struct k_sem prov_sem;
 
+static void host_files_remove(void)
+{
+	/* crypto library initialization to be able to remove stored keys. */
+	bt_mesh_crypto_init();
+	stored_keys_clear();
+	settings_test_backend_clear();
+}
+
 static void prov_complete(uint16_t net_idx, uint16_t addr)
 {
 	LOG_INF("Device provisioning is complete, addr: %d", addr);
@@ -376,10 +388,26 @@ static void device_setup(void)
 
 static int device_setup_and_self_provision(void)
 {
+	int err;
+
 	device_setup();
 
-	return bt_mesh_provision(test_netkey, test_netkey_idx, test_flags, test_ividx, TEST_ADDR,
-				 test_devkey);
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, test_netkey, &mesh_test_net_key);
+	if (err == -EALREADY) {
+		LOG_INF("Using previously imported primary network key");
+	} else if (err) {
+		FAIL("Unable to import network key (err: %d)", err);
+	}
+
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_DEV, test_devkey, &mesh_test_dev_key);
+	if (err == -EALREADY) {
+		LOG_INF("Using previously imported device key");
+	} else if (err) {
+		FAIL("Unable to import device key (err: %d)", err);
+	}
+
+	return bt_mesh_provision(&mesh_test_net_key, test_netkey_idx, test_flags, test_ividx,
+				 TEST_ADDR, &mesh_test_dev_key);
 }
 
 static void provisioner_setup(void)
@@ -389,7 +417,8 @@ static void provisioner_setup(void)
 		.unprovisioned_beacon = unprovisioned_beacon,
 		.node_added = prov_node_added,
 	};
-	uint8_t primary_netkey[16] = { 0xad, 0xde, 0xfa, 0x32 };
+	uint8_t primary_net_key[16] = { 0xad, 0xde, 0xfa, 0x32 };
+	struct bt_mesh_key mesh_primary_net_key;
 	struct bt_mesh_cdb_subnet *subnet;
 	uint8_t status;
 	int err;
@@ -398,14 +427,28 @@ static void provisioner_setup(void)
 
 	bt_mesh_device_setup(&prov, &comp);
 
-	ASSERT_OK(bt_mesh_cdb_create(primary_netkey));
-	ASSERT_OK(bt_mesh_provision(primary_netkey, 0, test_flags, test_ividx, TEST_PROV_ADDR,
-				    test_prov_devkey));
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, primary_net_key, &mesh_primary_net_key);
+	if (err) {
+		FAIL("Unable to import primary_net_key (err: %d)", err);
+	}
+
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_DEV, test_prov_devkey, &mesh_test_dev_key);
+	if (err) {
+		FAIL("Unable to import device key (err: %d)", err);
+	}
+
+	ASSERT_OK(bt_mesh_cdb_create(&mesh_primary_net_key));
+	ASSERT_OK(bt_mesh_provision(&mesh_primary_net_key, 0, test_flags, test_ividx,
+				    TEST_PROV_ADDR, &mesh_test_dev_key));
 
 	/* Adding a subnet for test_netkey as it is not primary. */
 	subnet = bt_mesh_cdb_subnet_alloc(test_netkey_idx);
 	ASSERT_TRUE(subnet != NULL);
-	memcpy(subnet->keys[0].net_key, test_netkey, 16);
+	err = bt_mesh_key_import(BT_MESH_KEY_TYPE_NET, test_netkey, &mesh_test_net_key);
+	if (err) {
+		FAIL("Unable to import test_netkey (err: %d)", err);
+	}
+	memcpy(&subnet->keys[0].net_key, &mesh_test_net_key, sizeof(struct bt_mesh_key));
 	bt_mesh_cdb_subnet_store(subnet);
 
 	err = bt_mesh_cfg_net_key_add(0, TEST_PROV_ADDR, test_netkey_idx, test_netkey, &status);
@@ -418,7 +461,7 @@ static void provisioner_setup(void)
 
 static void test_provisioning_data_save(void)
 {
-	settings_test_backend_clear();
+	host_files_remove();
 	bt_mesh_test_cfg_set(NULL, WAIT_TIME);
 
 	if (device_setup_and_self_provision()) {
@@ -443,8 +486,10 @@ static void test_provisioning_data_load(void)
 	/* explicitly verify that the keys resolves for a given addr and net_idx */
 	struct bt_mesh_msg_ctx ctx;
 	struct bt_mesh_net_tx tx = { .ctx = &ctx };
-	const uint8_t *dkey;
+	const struct bt_mesh_key *dkey;
 	uint8_t aid;
+	uint8_t net_key[16];
+	uint8_t dev_key[16];
 
 	tx.ctx->addr = TEST_ADDR;
 	tx.ctx->net_idx = test_netkey_idx;
@@ -456,12 +501,18 @@ static void test_provisioning_data_load(void)
 		FAIL("Failed to resolve keys");
 	}
 
-	if (memcmp(dkey, test_devkey, sizeof(test_devkey))) {
+	ASSERT_OK(bt_mesh_key_export(dev_key, dkey));
+	LOG_HEXDUMP_INF(dev_key, sizeof(dev_key), "Exported device key:");
+
+	if (memcmp(dev_key, test_devkey, sizeof(test_devkey))) {
 		FAIL("Resolved dev_key does not match");
 	}
 
-	if (memcmp(tx.sub->keys[0].net, test_netkey, sizeof(test_netkey))) {
-		FAIL("Resolved net_key does not match");
+	ASSERT_OK(bt_mesh_key_export(net_key, &tx.sub->keys[0].net));
+	LOG_HEXDUMP_INF(net_key, sizeof(net_key), "Exported network key:");
+
+	if (memcmp(net_key, test_netkey, sizeof(test_netkey))) {
+		FAIL("Resolved raw value of the net_key does not match");
 	}
 
 	if (tx.sub->kr_phase != ((test_flags & 1) << 1)) {
@@ -588,7 +639,7 @@ static void node_configure(void)
 
 static void test_access_data_save(void)
 {
-	settings_test_backend_clear();
+	host_files_remove();
 	bt_mesh_test_cfg_set(NULL, WAIT_TIME);
 
 	if (device_setup_and_self_provision()) {
@@ -808,7 +859,7 @@ static void test_cfg_save(void)
 
 	ASSERT_TRUE(current_stack_cfg != NULL);
 
-	settings_test_backend_clear();
+	host_files_remove();
 	bt_mesh_test_cfg_set(NULL, WAIT_TIME);
 
 	if (device_setup_and_self_provision()) {
@@ -925,7 +976,7 @@ static int mesh_settings_load_cb(const char *key, size_t len, settings_read_cb r
 static void test_reprovisioning_device(void)
 {
 	if (clear_settings) {
-		settings_test_backend_clear();
+		host_files_remove();
 	}
 
 	bt_mesh_test_cfg_set(NULL, WAIT_TIME);
@@ -959,7 +1010,7 @@ static void test_reprovisioning_provisioner(void)
 	int err;
 	bool status;
 
-	settings_test_backend_clear();
+	host_files_remove();
 	bt_mesh_test_cfg_set(NULL, WAIT_TIME);
 
 	provisioner_setup();

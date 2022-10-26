@@ -29,8 +29,8 @@ enum bt_mesh_key_evt;
 /** Network message encryption credentials */
 struct bt_mesh_net_cred {
 	uint8_t nid;         /* NID */
-	uint8_t enc[16];     /* EncKey */
-	uint8_t privacy[16]; /* PrivacyKey */
+	struct bt_mesh_key enc;      /* EncKey */
+	struct bt_mesh_key privacy;  /* PrivacyKey */
 };
 
 /** Subnet instance. */
@@ -57,13 +57,13 @@ struct bt_mesh_subnet {
 
 	struct bt_mesh_subnet_keys {
 		bool valid;
-		uint8_t net[16];       /* NetKey */
+		struct bt_mesh_key net;      /* NetKey */
 		struct bt_mesh_net_cred msg;
-		uint8_t net_id[8];     /* Network ID */
+		uint8_t net_id[8];      /* Network ID */
 	#if defined(CONFIG_BT_MESH_GATT_PROXY)
-		uint8_t identity[16];  /* IdentityKey */
+		struct bt_mesh_key identity; /* IdentityKey */
 	#endif
-		uint8_t beacon[16];    /* BeaconKey */
+		struct bt_mesh_key beacon;   /* BeaconKey */
 	} keys[2];
 };
 
@@ -133,7 +133,7 @@ struct bt_mesh_subnet *bt_mesh_subnet_get(uint16_t net_idx);
  *  @returns 0 on success, or (negative) error code on failure.
  */
 int bt_mesh_subnet_set(uint16_t net_idx, uint8_t kr_phase,
-		       const uint8_t key[16], const uint8_t new_key[16]);
+		       const struct bt_mesh_key *key, const struct bt_mesh_key *new_key);
 
 /** @brief Create Friendship credentials.
  *
@@ -149,7 +149,13 @@ int bt_mesh_subnet_set(uint16_t net_idx, uint8_t kr_phase,
 int bt_mesh_friend_cred_create(struct bt_mesh_net_cred *cred,
 			       uint16_t lpn_addr, uint16_t frnd_addr,
 			       uint16_t lpn_counter, uint16_t frnd_counter,
-			       const uint8_t key[16]);
+			       const struct bt_mesh_key *key);
+
+/** @brief Destroy Friendship credentials.
+ *
+ *  @param cred Credential object to destroy.
+ */
+void bt_mesh_friend_cred_destroy(struct bt_mesh_net_cred *cred);
 
 /** @brief Iterate through all valid network credentials to decrypt a message.
  *
