@@ -21,6 +21,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, LOG_LEVEL_INF);
 
 #define GROUP_ADDR 0xc000
 #define WAIT_TIME 60 /*seconds*/
+#define MULT_NETKEYS_WAIT_TIME 350 /*seconds*/
 #define BEACON_INTERVAL 10 /*seconds*/
 
 #define BEACON_TYPE_SECURE 0x01
@@ -296,16 +297,7 @@ static bool wait_for_beacon(bool (*process_cb)(const uint8_t *net_id, void *ctx)
 		FAIL("starting scan failed (err %d)", err);
 	}
 
-	/* Listen to beacons ONLY for one beacon interval.
-	 * Tests start quite often the waiting for the next beacon after
-	 * transmission or receiving the previous one. If start waiting timer
-	 * for BEACON_INTERVAL interval then timer expiration and receiving of
-	 * the beacon happen about the same time. That is possible unstable behavior
-	 * or failing some tests. To avoid this it is worth to add 1 second to
-	 * waiting time (BEACON_INTERVAL + 1) to guarantee that beacon comes
-	 * before timer expiration.
-	 */
-	err = k_sem_take(&observer_sem, K_SECONDS(BEACON_INTERVAL + 1));
+	err = k_sem_take(&observer_sem, K_SECONDS(BEACON_INTERVAL));
 	if (!err) {
 		received = true;
 	} else {
@@ -691,7 +683,7 @@ static void test_tx_multiple_netkeys(void)
 	NET_BUF_SIMPLE_DEFINE(buf, 22);
 	int err;
 
-	bt_mesh_test_cfg_set(&tx_cfg, 340);
+	bt_mesh_test_cfg_set(&tx_cfg, MULT_NETKEYS_WAIT_TIME);
 	bt_mesh_crypto_init();
 	k_sem_init(&observer_sem, 0, 1);
 
@@ -778,7 +770,7 @@ static void test_rx_multiple_netkeys(void)
 	uint8_t status;
 	int err;
 
-	bt_mesh_test_cfg_set(&rx_cfg, 340);
+	bt_mesh_test_cfg_set(&rx_cfg, MULT_NETKEYS_WAIT_TIME);
 	bt_mesh_test_setup();
 	bt_mesh_iv_update_test(true);
 
