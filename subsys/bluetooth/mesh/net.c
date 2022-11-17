@@ -933,6 +933,7 @@ static int net_set(const char *name, size_t len_rd, settings_read_cb read_cb,
 	}
 
 	memcpy(&bt_mesh.dev_key, &net.dev_key, sizeof(struct bt_mesh_key));
+	bt_mesh_key_assign(&bt_mesh.dev_key);
 	bt_mesh_comp_provision(net.primary_addr);
 
 	BT_DBG("Provisioned with primary address 0x%04x", net.primary_addr);

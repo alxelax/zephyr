@@ -319,6 +319,8 @@ static int net_keys_create(struct bt_mesh_subnet_keys *keys,
 			BT_ERR("Unable to import network key");
 			return err;
 		}
+	} else {
+		bt_mesh_key_assign(&keys->net);
 	}
 
 	BT_DBG("NID 0x%02x EncKey %s",
@@ -645,12 +647,12 @@ static int subnet_key_set(struct bt_mesh_subnet *sub, int key_idx, const struct 
 		return err;
 	}
 
+	memcpy(&sub->keys[key_idx].net, key, sizeof(struct bt_mesh_key));
+
 	err = net_keys_create(&sub->keys[key_idx], false, raw_key);
 	if (err) {
 		return err;
 	}
-
-	memcpy(&sub->keys[key_idx].net, key, sizeof(struct bt_mesh_key));
 
 	return 0;
 }

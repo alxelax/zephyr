@@ -21,6 +21,7 @@
 #include "net.h"
 #include "rpl.h"
 #include "settings.h"
+#include "keys.h"
 
 /* Tracking of what storage changes are pending for App and Net Keys. We
  * track this in a separate array here instead of within the respective
@@ -243,6 +244,7 @@ static int cdb_node_set(const char *name, size_t len_rd,
 
 	memcpy(node->uuid, val.uuid, 16);
 	memcpy(&node->dev_key, &val.dev_key, sizeof(struct bt_mesh_key));
+	bt_mesh_key_assign(&node->dev_key);
 
 	BT_DBG("Node 0x%04x recovered from storage", addr);
 
@@ -289,6 +291,8 @@ static int cdb_subnet_set(const char *name, size_t len_rd,
 		sub->kr_phase = key.kr_phase;
 		memcpy(&sub->keys[0].net_key, &key.val[0], sizeof(struct bt_mesh_key));
 		memcpy(&sub->keys[1].net_key, &key.val[1], sizeof(struct bt_mesh_key));
+		bt_mesh_key_assign(&sub->keys[0].net_key);
+		bt_mesh_key_assign(&sub->keys[1].net_key);
 
 		return 0;
 	}
@@ -302,6 +306,8 @@ static int cdb_subnet_set(const char *name, size_t len_rd,
 	sub->kr_phase = key.kr_phase;
 	memcpy(&sub->keys[0].net_key, &key.val[0], sizeof(struct bt_mesh_key));
 	memcpy(&sub->keys[1].net_key, &key.val[1], sizeof(struct bt_mesh_key));
+	bt_mesh_key_assign(&sub->keys[0].net_key);
+	bt_mesh_key_assign(&sub->keys[1].net_key);
 
 	BT_DBG("NetKeyIndex 0x%03x recovered from storage", net_idx);
 
@@ -353,6 +359,8 @@ static int cdb_app_key_set(const char *name, size_t len_rd,
 
 	memcpy(&app->keys[0].app_key, &key.val[0], sizeof(struct bt_mesh_key));
 	memcpy(&app->keys[1].app_key, &key.val[1], sizeof(struct bt_mesh_key));
+	bt_mesh_key_assign(&app->keys[0].app_key);
+	bt_mesh_key_assign(&app->keys[1].app_key);
 
 	BT_DBG("AppKeyIndex 0x%03x recovered from storage", app_idx);
 

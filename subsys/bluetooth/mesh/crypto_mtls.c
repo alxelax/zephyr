@@ -19,8 +19,19 @@
 /* Mesh requires to keep in persistent memory network keys (2 keys per subnetwork),
  * application keys (2 real keys per 1 configured) and device key.
  */
-#define KEY_ID_RANGE_SIZE (2 * CONFIG_BT_MESH_SUBNET_COUNT + \
-		2 * CONFIG_BT_MESH_APP_KEY_COUNT + 1)
+#if defined CONFIG_BT_MESH_CDB
+#define BT_MESH_CDB_KEY_ID_RANGE_SIZE (2 * SUBNET_COUNT + \
+		2 * APP_KEY_COUNT + NODE_COUNT)
+#else
+#define BT_MESH_CDB_KEY_ID_RANGE_SIZE  0
+#endif
+#define BT_MESH_KEY_ID_RANGE_SIZE (2 * CONFIG_BT_MESH_SUBNET_COUNT + \
+		2 * CONFIG_BT_MESH_APP_KEY_COUNT + 1 + BT_MESH_CDB_KEY_ID_RANGE_SIZE)
+#define BT_MESH_PSA_KEY_ID_USER_MIN (PSA_KEY_ID_USER_MIN + \
+		CONFIG_BT_MESH_PSA_KEY_ID_USER_MIN_OFFSET)
+
+BUILD_ASSERT(BT_MESH_PSA_KEY_ID_USER_MIN + BT_MESH_KEY_ID_RANGE_SIZE <= PSA_KEY_ID_USER_MAX,
+	"BLE Mesh PSA key id range overlaps maximum allowed boundary.");
 
 static struct {
 	bool is_ready;
@@ -28,7 +39,7 @@ static struct {
 	uint8_t public_key_be[PUB_KEY_SIZE + 1];
 } key;
 
-static psa_key_id_t pst_key_id[KEY_ID_RANGE_SIZE] = {PSA_KEY_ID_NULL};
+static ATOMIC_DEFINE(pst_keys, BT_MESH_KEY_ID_RANGE_SIZE);
 
 int bt_mesh_crypto_init(void)
 {
@@ -294,10 +305,10 @@ __weak psa_status_t mbedtls_psa_external_get_random(mbedtls_psa_external_random_
 
 __weak psa_key_id_t bt_mesh_user_keyid_alloc(void)
 {
-	for (int i = 0; i < KEY_ID_RANGE_SIZE; i++) {
-		if (pst_key_id[i] == PSA_KEY_ID_NULL) {
-			pst_key_id[i] = PSA_KEY_ID_USER_MIN + i;
-			return pst_key_id[i];
+	for (int i = 0; i < BT_MESH_KEY_ID_RANGE_SIZE; i++) {
+		if (!atomic_test_bit(pst_keys, i)) {
+			atomic_set_bit(pst_keys, i);
+			return BT_MESH_PSA_KEY_ID_USER_MIN + i;
 		}
 	}
 
@@ -306,13 +317,21 @@ __weak psa_key_id_t bt_mesh_user_keyid_alloc(void)
 
 __weak int bt_mesh_user_keyid_free(psa_key_id_t key_id)
 {
-	if (IN_RANGE(key_id, PSA_KEY_ID_USER_MIN,
-			PSA_KEY_ID_USER_MIN + KEY_ID_RANGE_SIZE - 1)) {
-		pst_key_id[key_id - PSA_KEY_ID_USER_MIN] = PSA_KEY_ID_NULL;
+	if (IN_RANGE(key_id, BT_MESH_PSA_KEY_ID_USER_MIN,
+			BT_MESH_PSA_KEY_ID_USER_MIN + BT_MESH_KEY_ID_RANGE_SIZE - 1)) {
+		atomic_clear_bit(pst_keys, key_id - BT_MESH_PSA_KEY_ID_USER_MIN);
 		return 0;
 	}
 
 	return -EIO;
+}
+
+__weak void bt_mesh_user_keyid_assign(psa_key_id_t key_id)
+{
+	if (IN_RANGE(key_id, BT_MESH_PSA_KEY_ID_USER_MIN,
+				BT_MESH_PSA_KEY_ID_USER_MIN + BT_MESH_KEY_ID_RANGE_SIZE - 1)) {
+		atomic_set_bit(pst_keys, key_id - BT_MESH_PSA_KEY_ID_USER_MIN);
+	}
 }
 
 int bt_mesh_key_import(enum bt_mesh_key_type type, const uint8_t in[16], struct bt_mesh_key *out)
@@ -402,6 +421,13 @@ int bt_mesh_key_export(uint8_t out[16], const struct bt_mesh_key *in)
 	}
 
 	return 0;
+}
+
+void bt_mesh_key_assign(struct bt_mesh_key *key)
+{
+	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
+		bt_mesh_user_keyid_assign(key->key);
+	}
 }
 
 int bt_mesh_key_destroy(struct bt_mesh_key *key)

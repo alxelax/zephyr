@@ -17,22 +17,30 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 /* Mesh requires to keep in persistent memory network keys (2 keys per subnetwork),
  * application keys (2 real keys per 1 configured) and device key.
  */
-#define KEY_ID_RANGE_SIZE (2 * CONFIG_BT_MESH_SUBNET_COUNT + \
-		2 * CONFIG_BT_MESH_APP_KEY_COUNT + 1)
+#if defined CONFIG_BT_MESH_CDB
+#define BT_MESH_CDB_KEY_ID_RANGE_SIZE (2 * SUBNET_COUNT + \
+		2 * APP_KEY_COUNT + NODE_COUNT)
+#else
+#define BT_MESH_CDB_KEY_ID_RANGE_SIZE  0
+#endif
+#define BT_MESH_KEY_ID_RANGE_SIZE (2 * CONFIG_BT_MESH_SUBNET_COUNT + \
+		2 * CONFIG_BT_MESH_APP_KEY_COUNT + 1 + BT_MESH_CDB_KEY_ID_RANGE_SIZE)
+#define BT_MESH_PSA_KEY_ID_USER_MIN (PSA_KEY_ID_USER_MIN + \
+		CONFIG_BT_MESH_PSA_KEY_ID_USER_MIN_OFFSET)
+#define BT_MESH_TEST_PSA_KEY_ID_USER_MIN (BT_MESH_PSA_KEY_ID_USER_MIN + \
+		BT_MESH_KEY_ID_RANGE_SIZE * get_device_nbr())
 
-#define DEV_ID (get_device_nbr() << 8)
-
-static psa_key_id_t pst_key_id[KEY_ID_RANGE_SIZE] = {PSA_KEY_ID_NULL};
+static ATOMIC_DEFINE(pst_keys, BT_MESH_KEY_ID_RANGE_SIZE);
 
 psa_key_id_t bt_mesh_user_keyid_alloc(void)
 {
-	unsigned int dev_id = DEV_ID;
+	for (int i = 0; i < BT_MESH_KEY_ID_RANGE_SIZE; i++) {
+		if (!atomic_test_bit(pst_keys, i)) {
+			atomic_set_bit(pst_keys, i);
 
-	for (int i = 0; i < KEY_ID_RANGE_SIZE; i++) {
-		if (pst_key_id[i] == PSA_KEY_ID_NULL) {
-			pst_key_id[i] = PSA_KEY_ID_USER_MIN + i + dev_id;
-			LOG_INF("key id %d is allocated", pst_key_id[i]);
-			return pst_key_id[i];
+			LOG_INF("key id %d is allocated", BT_MESH_TEST_PSA_KEY_ID_USER_MIN + i);
+
+			return BT_MESH_TEST_PSA_KEY_ID_USER_MIN + i;
 		}
 	}
 
@@ -41,26 +49,35 @@ psa_key_id_t bt_mesh_user_keyid_alloc(void)
 
 int bt_mesh_user_keyid_free(psa_key_id_t key_id)
 {
-	unsigned int dev_id = DEV_ID;
+	if (IN_RANGE(key_id, BT_MESH_TEST_PSA_KEY_ID_USER_MIN,
+			BT_MESH_TEST_PSA_KEY_ID_USER_MIN + BT_MESH_KEY_ID_RANGE_SIZE - 1)) {
+		atomic_clear_bit(pst_keys, key_id - BT_MESH_TEST_PSA_KEY_ID_USER_MIN);
 
-	if (!IN_RANGE(key_id - dev_id, PSA_KEY_ID_USER_MIN,
-			PSA_KEY_ID_USER_MIN + KEY_ID_RANGE_SIZE - 1)) {
-		return -EIO;
+		LOG_INF("key id %d is freed", key_id);
+
+		return 0;
 	}
 
-	LOG_INF("key id %d is freed", pst_key_id[key_id - PSA_KEY_ID_USER_MIN]);
-	pst_key_id[key_id - PSA_KEY_ID_USER_MIN] = PSA_KEY_ID_NULL;
+	return -EIO;
+}
 
-	return 0;
+void bt_mesh_user_keyid_assign(psa_key_id_t key_id)
+{
+	if (IN_RANGE(key_id, BT_MESH_PSA_KEY_ID_USER_MIN,
+			BT_MESH_PSA_KEY_ID_USER_MIN + BT_MESH_KEY_ID_RANGE_SIZE - 1)) {
+		atomic_set_bit(pst_keys, key_id - BT_MESH_TEST_PSA_KEY_ID_USER_MIN);
+		LOG_INF("key id %d is assigned", key_id);
+	} else {
+		LOG_WRN("key id %d is out of the reserved id range", key_id);
+	}
 }
 
 void stored_keys_clear(void)
 {
 	struct bt_mesh_key key;
-	unsigned int dev_id = DEV_ID;
 
-	for (int i = 0; i < KEY_ID_RANGE_SIZE; i++) {
-		key.key = PSA_KEY_ID_USER_MIN + i + dev_id;
+	for (int i = 0; i < BT_MESH_KEY_ID_RANGE_SIZE; i++) {
+		key.key = BT_MESH_TEST_PSA_KEY_ID_USER_MIN + i;
 		bt_mesh_key_destroy(&key);
 	}
 }

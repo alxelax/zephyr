@@ -392,6 +392,7 @@ static int app_id_set(struct app_key *app, int key_idx, const struct bt_mesh_key
 	}
 
 	memcpy(&app->keys[key_idx].val, key, sizeof(struct bt_mesh_key));
+	bt_mesh_key_assign(&app->keys[key_idx].val);
 
 	return 0;
 }
