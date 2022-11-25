@@ -25,6 +25,7 @@
 #include "foundation.h"
 #include "settings.h"
 #include "access.h"
+#include "keys.h"
 
 #define CID_NVAL   0xffff
 
@@ -1162,7 +1163,7 @@ static int cmd_net_key_add(const struct shell *shell, size_t argc, char *argv[])
 				return 0;
 			}
 
-			if (bt_mesh_key_export(key_val, subnet->keys[0].net_key)) {
+			if (bt_mesh_key_export(key_val, &subnet->keys[0].net_key)) {
 				shell_error(shell,
 					    "Unable to export key from subnet 0x%03x",
 					    key_net_idx);
@@ -1337,7 +1338,7 @@ static int cmd_app_key_add(const struct shell *shell, size_t argc, char *argv[])
 				return 0;
 			}
 
-			if (bt_mesh_key_export(key_val, app_key->keys[0].app_key)) {
+			if (bt_mesh_key_export(key_val, &app_key->keys[0].app_key)) {
 				shell_error(shell,
 					    "Unable to export app key 0x%03x",
 					    key_app_idx);
@@ -3110,7 +3111,7 @@ static void cdb_print_nodes(const struct shell *shell)
 
 		total++;
 		bin2hex(node->uuid, 16, uuid_hex_str, sizeof(uuid_hex_str));
-		if (bt_mesh_key_export(raw_dev_key, node->dev_key)) {
+		if (bt_mesh_key_export(raw_dev_key, &node->dev_key)) {
 			shell_error(shell, "Unable to export key from node 0x%04x", node->addr);
 			continue;
 		}
@@ -3139,7 +3140,7 @@ static void cdb_print_subnets(const struct shell *shell)
 			continue;
 		}
 
-		if (bt_mesh_key_export(raw_key, subnet->keys[0].net_key)) {
+		if (bt_mesh_key_export(raw_key, &subnet->keys[0].net_key)) {
 			shell_error(shell, "Unable to export key from subnet 0x%03x",
 					subnet->net_idx);
 			continue;
@@ -3170,7 +3171,7 @@ static void cdb_print_app_keys(const struct shell *shell)
 			continue;
 		}
 
-		if (bt_mesh_key_export(raw_key, app_key->keys[0].app_key)) {
+		if (bt_mesh_key_export(raw_key, &app_key->keys[0].app_key)) {
 			shell_error(shell, "Unable to export app key 0x%03x",
 					app_key->app_idx);
 			continue;
@@ -3347,8 +3348,8 @@ static int cmd_cdb_subnet_del(const struct shell *shell, size_t argc,
 		return 0;
 	}
 
-	bt_mesh_key_destroy(sub->keys[0].net_key);
-	bt_mesh_key_destroy(sub->keys[1].net_key);
+	bt_mesh_key_destroy(&sub->keys[0].net_key);
+	bt_mesh_key_destroy(&sub->keys[1].net_key);
 	bt_mesh_cdb_subnet_del(sub, true);
 
 	shell_print(shell, "Deleted subnet 0x%03x", net_idx);
@@ -3421,8 +3422,8 @@ static int cmd_cdb_app_key_del(const struct shell *shell, size_t argc,
 		return 0;
 	}
 
-	bt_mesh_key_destroy(key->keys[0].app_key);
-	bt_mesh_key_destroy(key->keys[1].app_key);
+	bt_mesh_key_destroy(&key->keys[0].app_key);
+	bt_mesh_key_destroy(&key->keys[1].app_key);
 	bt_mesh_cdb_app_key_del(key, true);
 
 	shell_print(shell, "Deleted AppKey 0x%03x", app_idx);
