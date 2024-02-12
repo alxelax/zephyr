@@ -336,6 +336,9 @@ found:
 		if (rc < 0) {
 			return rc;
 		}
+#if CONFIG_SETTINGS_NVS_NAME_CACHE
+		settings_nvs_cache_add(cf, name, write_name_id);
+#endif
 	}
 
 	return 0;
