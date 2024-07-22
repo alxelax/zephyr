@@ -13,3 +13,14 @@ tests:
     tags:
       - bluetooth
       - spi
+  sample.bluetooth.hci_spi.mesh:
+    harness: bluetooth
+    extra_args: EXTRA_CONF_FILE="mesh.conf"
+    platform_allow:
+      - nrf52dk/nrf52832
+    integration_platforms:
+      - nrf52dk/nrf52832
+    tags:
+      - bluetooth
+      - spi
+      - mesh
