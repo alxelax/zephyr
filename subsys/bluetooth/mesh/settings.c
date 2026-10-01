@@ -88,6 +88,8 @@ int bt_mesh_settings_set(settings_read_cb read_cb, void *cb_arg,
 	return 0;
 }
 
+/* The pending store scheduler below is also built without the settings subsystem. */
+#if defined(CONFIG_BT_SETTINGS)
 static int mesh_commit(void)
 {
 	if (!atomic_test_bit(bt_mesh.flags, BT_MESH_INIT)) {
@@ -121,6 +123,7 @@ static int mesh_commit(void)
 
 SETTINGS_STATIC_HANDLER_DEFINE_WITH_CPRIO(bt_mesh, "bt/mesh", NULL, NULL, mesh_commit, NULL,
 					  BT_SETTINGS_CPRIO_2);
+#endif
 
 /* Pending flags that use K_NO_WAIT as the storage timeout */
 #define NO_WAIT_PENDING_BITS (BIT(BT_MESH_SETTINGS_NET_PENDING) |           \
